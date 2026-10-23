@@ -42,6 +42,17 @@ function saveRecords(trackId: string, records: Records): void {
   }
 }
 
+/** Forgets the best times on the given tracks. */
+export function clearAllRecords(trackIds: string[]): void {
+  for (const trackId of trackIds) {
+    try {
+      localStorage.removeItem(storageKey(trackId));
+    } catch {
+      // Nothing to clear.
+    }
+  }
+}
+
 /** Compares a finished race against the stored records and saves any improvements. */
 export function updateRecords(
   trackId: string,

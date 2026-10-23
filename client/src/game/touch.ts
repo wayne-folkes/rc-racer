@@ -2,12 +2,12 @@ import type { CarInput } from './carPhysics';
 import type { Action, InputSource } from './controls';
 
 // On-screen controls for touch screens. A steering pad sits under the left thumb; gas, brake,
-// drift and item sit under the right, with reset and restart small in the top-right corner.
+// drift and item sit under the right, with reset and pause small in the top-right corner.
 // Every pointer is tracked by its id, so a thumb can slide across the steering pad and several
 // buttons can be held at once. The overlay only shows on touch devices.
 
 type Hold = 'left' | 'right' | 'gas' | 'brake' | 'drift';
-type Tap = Extract<Action, 'fire' | 'reset' | 'restart'>;
+type Tap = Extract<Action, 'fire' | 'reset' | 'pause'>;
 
 interface Press {
   el: HTMLElement;
@@ -28,7 +28,7 @@ const MARKUP = `
 </div>
 <div class="touch-utility">
   <button type="button" class="touch-mini" data-tap="reset" aria-label="Reset car" title="Reset car">↺</button>
-  <button type="button" class="touch-mini" data-tap="restart" aria-label="Restart race" title="Restart race">⟲</button>
+  <button type="button" class="touch-mini" data-tap="pause" aria-label="Pause" title="Pause">⏸</button>
 </div>
 `;
 

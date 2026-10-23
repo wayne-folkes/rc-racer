@@ -14,6 +14,7 @@
   --disabled: rgb(255 255 255 / 0.12);
   --touch-bg: rgb(15 23 42 / 0.55);
   --touch-pressed: rgb(250 204 21 / 0.4);
+  --title-shadow: rgb(2 6 23 / 0.9);
   --font: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
 }
 
@@ -519,6 +520,138 @@ body {
   outline-offset: 3px;
 }
 
+/* The title, pause and settings cards: a column of full-width buttons. */
+.menu-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.menu-stack .results-button + .results-button {
+  margin-top: 0;
+}
+
+.title-card {
+  text-align: center;
+}
+
+/* Skewed like a racing livery, in the accent yellow with a dark drop shadow. */
+.title-logo {
+  margin: 4px 0 6px;
+  color: var(--hud-accent);
+  font-size: clamp(44px, 14vw, 68px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-shadow: 3px 4px 0 var(--title-shadow);
+  transform: skewX(-8deg);
+}
+
+.title-tagline {
+  margin: 0 0 22px;
+  color: var(--hud-muted);
+  font-size: 15px;
+}
+
+.records-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.record-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--panel-soft);
+  font-size: 15px;
+}
+
+.record-row.is-head {
+  padding-top: 0;
+  padding-bottom: 0;
+  background: none;
+  color: var(--hud-muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.record-name {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-time {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 14px 0 6px;
+}
+
+.settings-value {
+  color: var(--hud-accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-slider {
+  display: block;
+  width: 100%;
+  margin: 0 0 12px;
+  accent-color: var(--hud-accent);
+}
+
+.settings-slider:focus-visible,
+.settings-slider.is-menu-focus {
+  outline: 3px solid var(--hud-text);
+  outline-offset: 3px;
+}
+
+.howto-head {
+  margin: 14px 0 4px;
+  color: var(--hud-accent);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.howto-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* Short landscape phones: smaller title and buttons, so the title card fits without scrolling. */
+@media (max-height: 500px) {
+  .title-logo {
+    font-size: 44px;
+  }
+
+  .title-tagline {
+    margin-bottom: 14px;
+  }
+
+  .title-card .results-button {
+    padding: 9px 16px;
+    font-size: 16px;
+  }
+}
+
 /* Between races the HUD and help bar have nothing to show. */
 body.is-idle .hud,
 body.is-idle .help {
@@ -666,7 +799,7 @@ body.is-idle .help {
   font-size: 18px;
 }
 
-/* Reset and restart sit under the item slot in the top-right corner, small so they're not hit by accident. */
+/* Reset and pause sit under the item slot in the top-right corner, small so they're not hit by accident. */
 .touch-utility {
   position: fixed;
   top: 150px;

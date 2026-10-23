@@ -21,7 +21,10 @@ export type SoundName =
 export type EngineId = 'player' | 'rival';
 
 const MUTE_KEY = 'rc-racer:muted';
-const MASTER_VOLUME = 0.6;
+const VOLUME_KEY = 'rc-racer:volume';
+/** Loudest the master output goes; the volume setting scales within this. */
+const MAX_VOLUME = 0.8;
+const DEFAULT_VOLUME = 0.75;
 /** How quickly engine pitch and volume follow the car (seconds). */
 const ENGINE_SMOOTHING = 0.06;
 /** Share of top speed where the engine "changes gear" and its pitch drops back. */
@@ -57,6 +60,8 @@ interface Engine {
 
 export class Sound {
   muted: boolean;
+  /** 0 to 1, from the settings slider. */
+  volume: number;
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private noise: AudioBuffer | null = null;
@@ -64,6 +69,7 @@ export class Sound {
 
   constructor() {
     this.muted = readMuted();
+    this.volume = readVolume();
     const unlock = () => this.unlock();
     window.addEventListener('keydown', unlock);
     window.addEventListener('pointerdown', unlock);
@@ -76,7 +82,7 @@ export class Sound {
       if (!Ctx) return;
       this.ctx = new Ctx();
       this.master = this.ctx.createGain();
-      this.master.gain.value = this.muted ? 0 : MASTER_VOLUME;
+      this.master.gain.value = this.outputLevel();
       this.master.connect(this.ctx.destination);
       this.noise = whiteNoise(this.ctx);
     }
@@ -84,10 +90,29 @@ export class Sound {
   }
 
   toggleMuted(): boolean {
-    this.muted = !this.muted;
-    writeMuted(this.muted);
-    if (this.ctx && this.master) this.master.gain.setTargetAtTime(this.muted ? 0 : MASTER_VOLUME, this.ctx.currentTime, 0.02);
+    this.setMuted(!this.muted);
     return this.muted;
+  }
+
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    writeMuted(muted);
+    this.applyLevel();
+  }
+
+  /** Sets the volume (0 to 1) and remembers it. */
+  setVolume(volume: number): void {
+    this.volume = clamp(volume, 0, 1);
+    writeVolume(this.volume);
+    this.applyLevel();
+  }
+
+  private outputLevel(): number {
+    return this.muted ? 0 : MAX_VOLUME * this.volume;
+  }
+
+  private applyLevel(): void {
+    if (this.ctx && this.master) this.master.gain.setTargetAtTime(this.outputLevel(), this.ctx.currentTime, 0.02);
   }
 
   /** Sets an engine's note; a gain of 0 silences it. Call every frame while it should sound. */
@@ -240,6 +265,23 @@ function readMuted(): boolean {
     return localStorage.getItem(MUTE_KEY) === '1';
   } catch {
     return false;
+  }
+}
+
+function readVolume(): number {
+  try {
+    const v = Number(localStorage.getItem(VOLUME_KEY));
+    return localStorage.getItem(VOLUME_KEY) !== null && Number.isFinite(v) ? clamp(v, 0, 1) : DEFAULT_VOLUME;
+  } catch {
+    return DEFAULT_VOLUME;
+  }
+}
+
+function writeVolume(volume: number): void {
+  try {
+    localStorage.setItem(VOLUME_KEY, String(volume));
+  } catch {
+    // Can't remember the setting; it still applies for this visit.
   }
 }
 

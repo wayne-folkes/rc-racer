@@ -13,6 +13,7 @@ const ACTION_KEYS: Record<Action, string[]> = {
   reset: ['KeyR'],
   restart: ['KeyN'],
   confirm: ['Enter'],
+  pause: ['Escape', 'KeyP'],
   up: ['ArrowUp'],
   down: ['ArrowDown'],
   left: ['ArrowLeft'],

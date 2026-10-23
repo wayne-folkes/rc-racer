@@ -13,6 +13,8 @@ export type Action =
   | 'restart'
   /** Press the focused (or main) button on a menu card. */
   | 'confirm'
+  /** Open or close the pause menu. */
+  | 'pause'
   /** Move focus between buttons on a menu card. */
   | 'up'
   | 'down'

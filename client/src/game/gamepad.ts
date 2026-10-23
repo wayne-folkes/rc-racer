@@ -7,7 +7,8 @@ import type { Action, InputSource } from './controls';
 //   Steer:      left stick or d-pad          Throttle: right trigger or A
 //   Brake:      left trigger or X            Handbrake: either bumper
 //   Fire item:  B                            Reset car: Y
-//   Restart:    Back / Select                Menus: d-pad or stick to move, A or Start to press
+//   Restart:    Back / Select                Pause: Start
+//   Menus: d-pad or stick to move, A to press
 
 /** The parts of a Gamepad this reads, so tests can pass plain objects. */
 export interface PadSnapshot {
@@ -41,7 +42,8 @@ const ACTION_BUTTONS: Record<Action, number[]> = {
   fire: [BUTTON.b],
   reset: [BUTTON.y],
   restart: [BUTTON.back],
-  confirm: [BUTTON.a, BUTTON.start],
+  confirm: [BUTTON.a],
+  pause: [BUTTON.start],
   up: [BUTTON.up],
   down: [BUTTON.down],
   left: [BUTTON.left],

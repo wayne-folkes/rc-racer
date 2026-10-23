@@ -77,14 +77,99 @@
         <button id="garage-next" class="results-button" type="button">Next race</button>
       </div>
     </div>
+    <div id="title" class="results" hidden>
+      <div class="results-card title-card" role="dialog" aria-labelledby="title-heading">
+        <h1 id="title-heading" class="title-logo">RC RACER</h1>
+        <p class="title-tagline">Four tracks. Three laps. Top three or bust.</p>
+        <div id="title-menu" class="menu-stack">
+          <button id="title-continue" class="results-button" type="button" hidden></button>
+          <button id="title-new" class="results-button" type="button">New season</button>
+          <button id="title-records-open" class="results-button results-button-secondary" type="button">Records</button>
+          <button id="title-settings-open" class="results-button results-button-secondary" type="button">Settings</button>
+          <button id="title-howto-open" class="results-button results-button-secondary" type="button">How to play</button>
+        </div>
+        <div id="title-confirm" hidden>
+          <p class="results-subtitle">Start over? This season's progress will be lost.</p>
+          <div class="menu-stack">
+            <button id="title-confirm-yes" class="results-button" type="button">Yes</button>
+            <button id="title-confirm-no" class="results-button results-button-secondary" type="button">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="records" class="results" hidden>
+      <div class="results-card" role="dialog" aria-labelledby="records-heading">
+        <h2 id="records-heading" class="results-title">Records</h2>
+        <ol id="records-list" class="records-list"></ol>
+        <button id="records-back" class="results-button results-button-secondary" type="button">Back</button>
+      </div>
+    </div>
+    <div id="settings" class="results" hidden>
+      <div class="results-card" role="dialog" aria-labelledby="settings-heading">
+        <h2 id="settings-heading" class="results-title">Settings</h2>
+        <div id="settings-main" class="menu-stack">
+          <button id="settings-sound" class="results-button" type="button" aria-pressed="true">Sound: On</button>
+          <label class="settings-row" for="settings-volume">
+            <span class="results-label">Volume</span>
+            <span id="settings-volume-value" class="settings-value">75%</span>
+          </label>
+          <input id="settings-volume" class="settings-slider" type="range" min="0" max="100" step="1" value="75" />
+          <button id="settings-reset" class="results-button results-button-secondary" type="button">Reset all progress</button>
+          <button id="settings-back" class="results-button results-button-secondary" type="button">Back</button>
+        </div>
+        <div id="settings-confirm" hidden>
+          <p class="results-subtitle">Erase your season and every track record? Sound settings are kept.</p>
+          <div class="menu-stack">
+            <button id="settings-reset-yes" class="results-button" type="button">Yes</button>
+            <button id="settings-reset-no" class="results-button results-button-secondary" type="button">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="howto" class="results" hidden>
+      <div class="results-card" role="dialog" aria-labelledby="howto-heading">
+        <h2 id="howto-heading" class="results-title">How to play</h2>
+        <h3 class="howto-head">Keyboard</h3>
+        <p class="howto-text">
+          <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> or <kbd>WASD</kbd> drive · <kbd>Space</kbd> handbrake ·
+          <kbd>X</kbd> use item · <kbd>R</kbd> reset · <kbd>N</kbd> restart race · <kbd>Esc</kbd> pause ·
+          <kbd>M</kbd> mute
+        </p>
+        <h3 class="howto-head">Gamepad</h3>
+        <p class="howto-text">
+          Stick or D-pad steer · RT gas · LT brake · LB/RB drift · B item · Y reset · Back restart · Start pause
+        </p>
+        <h3 class="howto-head">Touch</h3>
+        <p class="howto-text">
+          Steer with the pad on the left. GAS, BRAKE, DRIFT and ITEM sit on the right. ↺ resets the car and ⏸ pauses.
+        </p>
+        <h3 class="howto-head">Season</h3>
+        <p class="howto-text">
+          Finish in the top three to go through to the next round. Prize money buys upgrades in the garage between
+          races. You get 2 continues to retry a race you miss.
+        </p>
+        <button id="howto-back" class="results-button results-button-secondary" type="button">Back</button>
+      </div>
+    </div>
+    <div id="pause" class="results" hidden>
+      <div class="results-card" role="dialog" aria-labelledby="pause-heading">
+        <h2 id="pause-heading" class="results-title">Paused</h2>
+        <div class="menu-stack">
+          <button id="pause-resume" class="results-button" type="button">Resume</button>
+          <button id="pause-restart" class="results-button results-button-secondary" type="button">Restart race</button>
+          <button id="pause-settings" class="results-button results-button-secondary" type="button">Settings</button>
+          <button id="pause-quit" class="results-button results-button-secondary" type="button">Quit to title</button>
+        </div>
+      </div>
+    </div>
     <div id="toast" class="toast" role="status" hidden></div>
     <div id="help" class="help">
       <div data-hint="keyboard">
         <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> or <kbd>WASD</kbd> drive · <kbd>Space</kbd> handbrake ·
-        <kbd>X</kbd> use item · <kbd>R</kbd> reset · <kbd>N</kbd> restart race · <kbd>M</kbd> mute
+        <kbd>X</kbd> use item · <kbd>R</kbd> reset · <kbd>N</kbd> restart race · <kbd>Esc</kbd> pause · <kbd>M</kbd> mute
       </div>
       <div data-hint="gamepad" hidden>
-        Stick/D-pad steer · RT gas · LT brake · LB/RB drift · B item · Y reset · Back restart
+        Stick/D-pad steer · RT gas · LT brake · LB/RB drift · B item · Y reset · Back restart · Start pause
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

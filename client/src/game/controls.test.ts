@@ -47,7 +47,8 @@ describe('padActions', () => {
     expect(padActions(pad({ b: 1 }))).toContain('fire');
     expect(padActions(pad({ y: 1 }))).toContain('reset');
     expect(padActions(pad({ back: 1 }))).toContain('restart');
-    expect(padActions(pad({ start: 1 }))).toContain('confirm');
+    expect(padActions(pad({ start: 1 }))).toContain('pause');
+    expect(padActions(pad({ start: 1 }))).not.toContain('confirm');
     expect(padActions(pad({ a: 1 }))).toContain('confirm');
   });
 

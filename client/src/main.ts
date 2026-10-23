@@ -27,8 +27,12 @@ import { TrackPath, type Projection } from './game/trackPath';
 import { buildTrackScene, disposeScene } from './game/trackScene';
 import { TouchControls } from './game/touch';
 import { createWeather, type WeatherScene } from './game/weatherScene';
-import { RaceWorld, type Racer } from './game/world';
+import { NO_INPUT, RaceWorld, type Racer } from './game/world';
+import { BackCard, type MenuCard } from './ui/card';
 import { Garage } from './ui/garage';
+import { PauseCard } from './ui/pause';
+import { SettingsCard } from './ui/settings';
+import { RecordsCard, TitleCard, type TitleInfo } from './ui/title';
 
 const STEP = 1 / 120;
 const MAX_FRAME = 0.25;
@@ -38,6 +42,16 @@ const ORDINAL_SUFFIXES = ['th', 'st', 'nd', 'rd'];
 const WRONG_WAY_DOT = -3;
 /** Seconds of wrong-way driving before the WRONG WAY banner shows. */
 const WRONG_WAY_DELAY = 0.6;
+/** The title's attract demo: the AI drives every car, a touch under race pace. */
+const DEMO_SKILL = { pace: 0.92, steerGain: 2.4 };
+/** Demo races skip the countdown, so the cars are moving as soon as the title shows. */
+const DEMO_COUNTDOWN = 0.01;
+/** Seconds the demo waits after its leader finishes before moving on to the next track. */
+const DEMO_NEXT_DELAY = 3;
+/** Item sound effects in the demo are quieter, so the title stays calm. */
+const DEMO_SOUND_VOLUME = 0.3;
+/** How far a left or right press moves a focused slider (percent). */
+const SLIDER_NUDGE = 5;
 const ITEM_LABELS: Record<ItemKind, { icon: string; name: string }> = {
   missile: { icon: '🚀', name: 'Missile' },
   bomb: { icon: '💣', name: 'Bomb' },
@@ -58,6 +72,11 @@ interface CarView {
   racer: Racer;
   model: CarModel;
 }
+/**
+ * How a race scene is built: 'idle' sits on the grid with nothing moving (behind the garage and
+ * summary cards), 'racing' is a live race, and 'demo' is the title screen's attract race.
+ */
+type BuildMode = 'idle' | 'racing' | 'demo';
 
 const container = document.getElementById('app')!;
 const renderer = new WebGLRenderer({ antialias: true });
@@ -102,6 +121,13 @@ let trackScene: Group | null = null;
 let carViews: CarView[] = [];
 /** False while the garage or a summary card is up: the scene is built but nothing moves. */
 let live = true;
+/** True during the title screen's attract demo: the AI drives every car and nothing is recorded. */
+let demo = false;
+/** True while the pause menu has the race frozen. */
+let paused = false;
+/** Which track the demo is on, and the time left before it moves on once its leader has finished. */
+let demoIndex = 0;
+let demoTimer = 0;
 let raceCount = 0;
 /** Round label for the HUD and the countdown banner. */
 let roundHud = '';
@@ -175,6 +201,35 @@ const garage = new Garage(season, {
   },
 });
 
+/**
+ * The cards that open over the game: the title screen, the pause menu and their panels. Only the
+ * top of the stack shows. Esc or pause backs out of it (see pauseKey).
+ */
+const cardStack: MenuCard[] = [];
+const titleCard = new TitleCard(titleInfo, {
+  continueSeason: resumeSeason,
+  newSeason,
+  records: () => pushCard(recordsCard),
+  settings: () => openSettings(true),
+  howToPlay: () => pushCard(howtoCard),
+});
+const recordsCard = new RecordsCard(popCard);
+const howtoCard = new BackCard('howto', 'howto-back', popCard);
+const settingsCard = new SettingsCard(sound, {
+  back: popCard,
+  soundChanged: showMuted,
+  progressReset: () => season.restart(),
+});
+const pauseCard = new PauseCard(canRestart, {
+  resume: resumeRace,
+  restart: () => {
+    if (canRestart()) startRace();
+  },
+  settings: () => openSettings(false),
+  quit: quitToTitle,
+});
+const allCards: MenuCard[] = [titleCard, recordsCard, howtoCard, settingsCard, pauseCard];
+
 /** Takes the current race's scene, cars and item effects out of the scene and frees them. */
 function clearRace(): void {
   if (!trackScene) return;
@@ -194,10 +249,10 @@ function clearRace(): void {
 }
 
 /**
- * Builds a race on a track: the scene, the cars and the race itself. A race that isn't `playing`
+ * Builds a race on a track: the scene, the cars and the race itself. A race that isn't 'racing'
  * sits on the grid, with nothing moving, until something starts it.
  */
-function buildRace(def: TrackDef, playing: boolean): void {
+function buildRace(def: TrackDef, mode: BuildMode): void {
   clearRace();
   track = new TrackPath(def.controlPoints, def.halfWidth);
   // A new seed on every build, so a retry doesn't replay the same item boxes.
@@ -207,7 +262,9 @@ function buildRace(def: TrackDef, playing: boolean): void {
     playerTuning: season.playerTuning,
     opponentPace: season.opponentPace,
     seed: raceCount,
+    autopilot: mode === 'demo' ? DEMO_SKILL : undefined,
   });
+  if (mode === 'demo') world.race.countdown = DEMO_COUNTDOWN;
 
   trackScene = buildTrackScene(track, def.theme);
   scene.add(trackScene);
@@ -230,8 +287,11 @@ function buildRace(def: TrackDef, playing: boolean): void {
   hud.round.textContent = roundHud;
   hud.positionTotal.textContent = `/ ${world.racers.length}`;
 
-  live = playing;
-  document.body.classList.toggle('is-idle', !playing);
+  live = mode !== 'idle';
+  demo = mode === 'demo';
+  paused = false;
+  demoTimer = DEMO_NEXT_DELAY;
+  document.body.classList.toggle('is-idle', mode !== 'racing');
   wrongWayTime = 0;
   timedBanner = null;
   standingsKey = '';
@@ -240,15 +300,17 @@ function buildRace(def: TrackDef, playing: boolean): void {
 
 /** Starts a race on the season's current track. */
 function startRace(): void {
-  buildRace(season.track, true);
+  clearCards();
+  buildRace(season.track, 'racing');
   garage.hide();
   results.root.hidden = true;
 }
 
 /** Shows the garage over the scene of the next track, which stays still until the next race starts. */
 function openGarage(): void {
+  clearCards();
   results.root.hidden = true;
-  buildRace(season.tracks[season.state.round + 1] ?? season.track, false);
+  buildRace(season.tracks[season.state.round + 1] ?? season.track, 'idle');
   garage.show();
 }
 
@@ -264,6 +326,89 @@ function newSeason(): void {
   startRace();
 }
 
+/** Carries on with the saved season where it was left: the race, the garage or the summary card. */
+function resumeSeason(): void {
+  clearCards();
+  switch (season.state.status) {
+    case 'racing':
+      startRace();
+      break;
+    case 'shop':
+      openGarage();
+      break;
+    default:
+      // Failed, game over or champion: the same card as after a race, without the race stats.
+      buildRace(season.track, 'idle');
+      showEndCard(false);
+  }
+}
+
+/** Whether a season is saved and still going. Read from storage, so a season wiped by a reset doesn't count. */
+function savedSeasonInProgress(): boolean {
+  const saved = loadSeason();
+  return saved !== null && (saved.status === 'racing' || saved.status === 'shop' || saved.status === 'failed');
+}
+
+/** The round Continue would take up: the current one, or the next after a visit to the garage. */
+function upcomingRound(): number {
+  return season.state.status === 'shop' ? season.state.round + 1 : season.state.round;
+}
+
+function titleInfo(): TitleInfo {
+  const inProgress = savedSeasonInProgress();
+  if (!inProgress) return { continueLabel: null, inProgress };
+  const index = upcomingRound();
+  return { continueLabel: `Continue · Round ${index + 1} · ${season.tracks[index].name}`, inProgress };
+}
+
+/** Starts the title's attract demo on the track at this index. No season, records or banners are involved. */
+function startDemo(index: number): void {
+  demoIndex = index;
+  buildRace(season.tracks[index], 'demo');
+}
+
+/** Moves the demo on to the next track in the list, so the title cycles through them all. */
+function nextDemo(): void {
+  startDemo((demoIndex + 1) % season.tracks.length);
+}
+
+/** Shows the title screen over an attract demo. Nothing here changes the season or the records. */
+function showTitle(): void {
+  clearCards();
+  results.root.hidden = true;
+  startDemo(savedSeasonInProgress() ? upcomingRound() : 0);
+  pushCard(titleCard);
+}
+
+/** Leaves the race for the title. The season is saved as it stands; the race in progress is abandoned, not recorded. */
+function quitToTitle(): void {
+  persist();
+  showTitle();
+}
+
+/** Freezes the race and opens the pause menu. */
+function pauseRace(): void {
+  paused = true;
+  pushCard(pauseCard);
+}
+
+function resumeRace(): void {
+  paused = false;
+  clearCards();
+}
+
+/** Opens the settings card. Reset progress is only offered from the title screen. */
+function openSettings(fromTitle: boolean): void {
+  settingsCard.allowReset = fromTitle;
+  pushCard(settingsCard);
+}
+
+/** Restarting starts the race again on the same track without spending a continue. Only while a race is on. */
+function canRestart(): boolean {
+  // Once over the line the result stands, so a 4th place can't be dodged by restarting.
+  return !demo && season.state.status === 'racing' && world.race.phase !== 'finished';
+}
+
 /** Puts the player's car back on the centreline nearest to it, facing the way the track runs. */
 function resetCar(): void {
   world.resetCar(0);
@@ -272,6 +417,11 @@ function resetCar(): void {
 
 function fixedUpdate(dt: number): void {
   if (!live) return;
+  if (demo) {
+    // The AI drives every car, the player's included, and nothing is recorded.
+    world.step(dt, NO_INPUT);
+    return;
+  }
   handleRaceEvents(world.step(dt, controls.carInput()));
   updateWrongWay(dt, world.playerProj);
 }
@@ -317,21 +467,21 @@ function playItemSounds(events: ReturnType<typeof world.items.drainEvents>): voi
     const name = ITEM_SOUNDS[e.type];
     if (!name) continue;
     const distance = Math.hypot(e.x - world.player.x, e.z - world.player.z);
-    sound.play(name, distanceVolume(distance));
+    sound.play(name, distanceVolume(distance) * (demo ? DEMO_SOUND_VOLUME : 1));
   }
 }
 
 /** Beeps for 3, 2, 1 (GO comes with the race's own 'go' event). */
 function updateCountdownBeeps(): void {
-  if (!live || world.race.phase !== 'countdown') return;
+  if (!live || demo || world.race.phase !== 'countdown') return;
   const n = Math.ceil(world.race.countdown);
   if (n !== lastBeep && n <= 3) sound.play('beep');
   lastBeep = n;
 }
 
-/** The player's engine, plus the nearest opponent's, fading with distance. Silent in menus. */
+/** The player's engine, plus the nearest opponent's, fading with distance. Silent in menus and the demo. */
 function updateEngines(): void {
-  if (!live || menuCard()) {
+  if (!live || demo || menuCard()) {
     sound.silenceEngines();
     return;
   }
@@ -380,9 +530,9 @@ function tickTimedBanner(dt: number): void {
   onDone?.();
 }
 
-/** A timed message wins, then the countdown, then WRONG WAY. Nothing shows while the scene is idle. */
+/** A timed message wins, then the countdown, then WRONG WAY. Nothing shows while the scene is idle or in the demo. */
 function currentBanner(): Banner | null {
-  if (!live) return null;
+  if (!live || demo) return null;
   if (timedBanner) return { text: timedBanner.text, tone: timedBanner.tone };
   if (world.race.phase === 'countdown') {
     return { text: String(Math.ceil(world.race.countdown)), tone: 'white', sub: roundBanner };
@@ -598,21 +748,67 @@ function showEndCard(raced: boolean): void {
     }
     default:
       setButton(results.primary, 'New season', newSeason);
-      setButton(results.secondary, null);
+      setButton(results.secondary, 'Title screen', showTitle);
   }
   results.root.hidden = false;
 }
 
-/** The menu card on screen, if one is open: the garage, or the results card. */
-function menuCard(): HTMLElement | null {
-  if (garage.open) return garageCard;
-  return results.root.hidden ? null : results.root;
+/** Shows the top card of the stack and hides the rest. */
+function syncCards(): void {
+  const top = topCard();
+  for (const card of allCards) card.root.hidden = card !== top;
+  top?.refresh?.();
+  clearMenuFocus();
 }
 
-/** The card's main button: the garage's next race, or the results card's primary button. */
+function topCard(): MenuCard | undefined {
+  return cardStack[cardStack.length - 1];
+}
+
+function pushCard(card: MenuCard): void {
+  cardStack.push(card);
+  syncCards();
+}
+
+function popCard(): void {
+  cardStack.pop();
+  syncCards();
+}
+
+function clearCards(): void {
+  cardStack.length = 0;
+  syncCards();
+}
+
+/** The card on screen, if one is open: the garage, the results card, or the top of the menu stack. */
+function menuCard(): HTMLElement | null {
+  if (garage.open) return garageCard;
+  if (!results.root.hidden) return results.root;
+  return topCard()?.root ?? null;
+}
+
+/** The card's main button: the garage's next race, the results card's primary, or the menu's. */
 function primaryButton(): HTMLButtonElement | null {
   if (garage.open) return garage.next;
-  return results.root.hidden ? null : results.primary;
+  if (!results.root.hidden) return results.primary;
+  return topCard()?.primary() ?? null;
+}
+
+/**
+ * Esc or pause: closes a prompt or steps back out of a panel, resumes a paused race, or pauses a
+ * live one. The garage and results cards ignore it.
+ */
+function pauseKey(): void {
+  if (garage.open || !results.root.hidden) return;
+  const top = topCard();
+  if (!top) {
+    if (live && !demo && world.race.phase !== 'finished') pauseRace();
+    return;
+  }
+  if (top.dismiss?.()) return;
+  if (top === pauseCard) resumeRace();
+  // The title is the bottom of the stack, so backing out of it does nothing.
+  else if (cardStack.length > 1) popCard();
 }
 
 /** Takes the menu focus ring off every button. */
@@ -620,17 +816,24 @@ function clearMenuFocus(): void {
   for (const el of document.querySelectorAll('.is-menu-focus')) el.classList.remove('is-menu-focus');
 }
 
-/** Moves the focus ring to a button. Gamepad and touch players don't trigger focus-visible, so it's marked too. */
-function focusMenuButton(button: HTMLButtonElement): void {
+/** Moves the focus ring to a control. Gamepad and touch players don't trigger focus-visible, so it's marked too. */
+function focusMenuButton(el: HTMLElement): void {
   clearMenuFocus();
-  button.classList.add('is-menu-focus');
-  button.focus();
+  el.classList.add('is-menu-focus');
+  el.focus();
+}
+
+/** Moves a slider a step left or right, the same as a drag or an arrow key would. */
+function nudgeSlider(slider: HTMLInputElement, direction: number): void {
+  slider.value = String(Number(slider.value) + direction * SLIDER_NUDGE);
+  slider.dispatchEvent(new Event('input'));
 }
 
 /**
  * Arrows, d-pad or stick move focus round the open card. Confirm (Enter, or the gamepad's A) presses
- * the focused button, or the primary one if nothing is focused. Each press is read once per frame,
- * so Enter can't fire twice (which would spend two continues or skip a round).
+ * the focused control, or the primary one if nothing is focused. A focused slider takes left and
+ * right to change its value. Each press is read once per frame, so Enter can't fire twice (which
+ * would spend two continues or skip a round).
  */
 function handleMenuInput(): void {
   const card = menuCard();
@@ -639,20 +842,29 @@ function handleMenuInput(): void {
     clearMenuFocus();
     return;
   }
-  const buttons = [...card.querySelectorAll<HTMLButtonElement>('button')].filter((b) => !b.hidden && !b.disabled);
-  if (buttons.length === 0) return;
+  // The buttons and sliders that are showing, in order. Anything inside a hidden block is skipped.
+  const items = [...card.querySelectorAll<HTMLButtonElement | HTMLInputElement>('button, input[type="range"]')].filter(
+    (el) => !el.disabled && !el.closest('[hidden]'),
+  );
+  if (items.length === 0) return;
 
-  const forward = controls.pressed('down') || controls.pressed('right');
-  const back = controls.pressed('up') || controls.pressed('left');
+  const focused = document.activeElement;
+  const slider = focused instanceof HTMLInputElement && focused.type === 'range' ? focused : null;
+  if (slider) {
+    const direction = (controls.pressed('right') ? 1 : 0) - (controls.pressed('left') ? 1 : 0);
+    if (direction !== 0) nudgeSlider(slider, direction);
+  }
+  const forward = controls.pressed('down') || (!slider && controls.pressed('right'));
+  const back = controls.pressed('up') || (!slider && controls.pressed('left'));
   if (forward !== back) {
-    const focused = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    const from = focused === -1 ? Math.max(0, buttons.indexOf(primary)) : focused;
+    const index = items.indexOf(focused as HTMLButtonElement);
+    const from = index === -1 ? Math.max(0, items.indexOf(primary)) : index;
     const step = forward ? 1 : -1;
-    focusMenuButton(buttons[(from + step + buttons.length) % buttons.length]);
+    focusMenuButton(items[(from + step + items.length) % items.length]);
   }
   if (controls.pressed('confirm')) {
-    const focused = buttons.find((b) => b === document.activeElement);
-    (focused ?? primary).click();
+    const focusedItem = items.find((el) => el === focused);
+    (focusedItem ?? primary).click();
   }
 }
 
@@ -732,12 +944,12 @@ function frame(now: number): void {
   // The touch buttons would sit on top of the menu cards, so they only show during a race.
   touch.setVisible(!menuCard());
   handleMenuInput();
-  if (live && controls.pressed('reset') && world.race.phase === 'racing') resetCar();
-  // Restarting starts the race again on the same track without spending a continue. Only while a race is on.
-  // Once over the line the result stands, so a 4th place can't be dodged by restarting.
-  const canRestart = season.state.status === 'racing' && world.race.phase !== 'finished';
-  if (canRestart && controls.pressed('restart')) startRace();
-  if (live && world.race.phase === 'racing' && controls.pressed('fire')) world.useItem(0);
+  if (controls.pressed('pause')) pauseKey();
+  // Driving only happens in a live race: not in the title's demo, and not while paused.
+  const driving = live && !demo && !paused;
+  if (driving && controls.pressed('reset') && world.race.phase === 'racing') resetCar();
+  if (canRestart() && controls.pressed('restart')) startRace();
+  if (driving && world.race.phase === 'racing' && controls.pressed('fire')) world.useItem(0);
   if (keyboard.wasPressed('KeyM')) {
     sound.toggleMuted();
     showMuted();
@@ -747,30 +959,42 @@ function frame(now: number): void {
   if (controls.lastUsed === 'gamepad') sound.unlock();
   controls.endFrame();
 
-  accumulator += dt;
-  while (accumulator >= STEP) {
-    fixedUpdate(STEP);
-    accumulator -= STEP;
+  if (paused) {
+    // Frozen: no simulation steps, and no time builds up to be run in a rush on resume.
+    accumulator = 0;
+  } else {
+    accumulator += dt;
+    while (accumulator >= STEP) {
+      fixedUpdate(STEP);
+      accumulator -= STEP;
+    }
+  }
+  // The demo moves on a few seconds after its leader crosses the line.
+  if (demo && world.race.phase === 'finished') {
+    demoTimer -= dt;
+    if (demoTimer <= 0) nextDemo();
   }
 
-  tickTimedBanner(dt);
+  // When paused, the effects, banners, camera and car animation stand still too.
+  const simDt = paused ? 0 : dt;
+  tickTimedBanner(simDt);
   updateBanner();
-  itemScene.update(dt);
+  itemScene.update(simDt);
   const itemEvents = world.items.drainEvents();
   // Being hit buzzes the controller, if it can.
-  if (itemEvents.some((event) => event.type === 'explode' && event.victim === 0)) gamepad.rumble(0.8, 250);
+  if (!demo && itemEvents.some((event) => event.type === 'explode' && event.victim === 0)) gamepad.rumble(0.8, 250);
   itemScene.handleEvents(itemEvents);
   playItemSounds(itemEvents);
   updateCountdownBeeps();
   updateEngines();
   // Ambient, so it keeps moving behind the garage and results cards too.
-  weather?.update(dt, world.player.x, world.player.z);
+  weather?.update(simDt, world.player.x, world.player.z);
   // carViews are in the same order as world.racers, so index i matches world.items.status[i].
   carViews.forEach(({ racer, model }, i) => {
     model.setBoosting(world.items.status[i].boost > 0);
-    model.sync(racer.car, dt);
+    model.sync(racer.car, simDt);
   });
-  followCamera.update(world.player, dt);
+  followCamera.update(world.player, simDt);
   sun.position.set(world.player.x + 30, 60, world.player.z + 20);
   sun.target.position.set(world.player.x, 0, world.player.z);
   updateHud();
@@ -781,18 +1005,7 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 
-// Pick up where the saved season left off.
-switch (season.state.status) {
-  case 'racing':
-    startRace();
-    break;
-  case 'shop':
-    openGarage();
-    break;
-  default:
-    // Failed, game over or champion: the same card as after a race, without the race stats.
-    buildRace(season.track, false);
-    showEndCard(false);
-}
+// The page opens on the title screen, over the attract demo.
+showTitle();
 
 requestAnimationFrame(frame);
