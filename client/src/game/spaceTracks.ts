@@ -1,4 +1,4 @@
-import { pickupRow } from './items';
+import { hazardZones, pickupRow } from './items';
 import type { Point } from './trackPath';
 import type { TrackDef } from './tracks';
 
@@ -18,12 +18,8 @@ export const SPACE_TRACKS: TrackDef[] = [
       [0, -66], [-26, -58], [-60, -38], [-96, -8], [-108, 26], [-86, 52], [-54, 46], [-26, 56],
     ]),
     layout: {
-      hazards: [
-        { kind: 'oil', at: 0.27, lateral: 3.5, radius: 1.8 },
-        { kind: 'puddle', at: 0.46, lateral: -3, radius: 2.4 },
-        { kind: 'oil', at: 0.58, lateral: 2.5, radius: 1.8 },
-        { kind: 'puddle', at: 0.74, lateral: -2.5, radius: 2.2 },
-      ],
+      hazards: [],
+      hazardZones: hazardZones(7, [0.27, 0.46, 0.58, 0.74]),
       pickups: [
         ...pickupRow(0.12, ['missile', 'bomb', 'missile']),
         ...pickupRow(0.31, ['bomb', 'missile', 'bomb']),
@@ -37,7 +33,7 @@ export const SPACE_TRACKS: TrackDef[] = [
       // Low gravity would make these a long way up; the long diagonals are the place for them.
       ramps: [{ at: 0.4 }, { at: 0.62 }],
     },
-    theme: { sky: '#05060d', ground: '#8d8d92', road: '#2d2e35', scenery: 'craters' },
+    theme: { sky: '#05060d', ground: '#8d8d92', road: '#2d2e35', scenery: 'craters', meteors: true },
   },
   {
     id: 'mars',
@@ -50,12 +46,8 @@ export const SPACE_TRACKS: TrackDef[] = [
       [72, 0], [92, -18], [80, -42], [44, -54], [10, -40], [-24, -54], [-62, -48], [-90, -18], [-88, 20],
     ]),
     layout: {
-      hazards: [
-        { kind: 'puddle', at: 0.1, lateral: -2, radius: 1.8 },
-        { kind: 'oil', at: 0.36, lateral: 2.6, radius: 1.4 },
-        { kind: 'puddle', at: 0.6, lateral: -2.2, radius: 1.8 },
-        { kind: 'oil', at: 0.86, lateral: 2, radius: 1.4 },
-      ],
+      hazards: [],
+      hazardZones: hazardZones(5, [0.1, 0.36, 0.6, 0.86], 0.01),
       pickups: [
         ...pickupRow(0.14, ['missile', 'bomb', 'missile']),
         ...pickupRow(0.52, ['bomb', 'missile', 'bomb']),
@@ -69,7 +61,7 @@ export const SPACE_TRACKS: TrackDef[] = [
       ],
       ramps: [{ at: 0.07 }, { at: 0.31 }, { at: 0.5 }, { at: 0.8 }],
     },
-    theme: { sky: '#d9a273', ground: '#b9582f', road: '#4b2f27', scenery: 'mesas', weather: 'dust' },
+    theme: { sky: '#d9a273', ground: '#b9582f', road: '#4b2f27', scenery: 'mesas', weather: 'dust', meteors: true },
   },
   {
     id: 'io',
@@ -81,12 +73,8 @@ export const SPACE_TRACKS: TrackDef[] = [
       [0, 26], [-18, 34], [-46, 50], [-80, 38], [-94, 6], [-90, -28], [-62, -50], [-28, -44],
     ]),
     layout: {
-      hazards: [
-        { kind: 'oil', at: 0.16, lateral: 2.8, radius: 1.6 },
-        { kind: 'puddle', at: 0.33, lateral: -2.4, radius: 2 },
-        { kind: 'oil', at: 0.58, lateral: -2.6, radius: 1.6 },
-        { kind: 'puddle', at: 0.83, lateral: 2.4, radius: 2 },
-      ],
+      hazards: [],
+      hazardZones: hazardZones(5.5, [0.16, 0.33, 0.665, 0.83], 0.01),
       pickups: [
         ...pickupRow(0.1, ['missile', 'bomb', 'missile']),
         ...pickupRow(0.38, ['bomb', 'missile', 'bomb']),
@@ -101,7 +89,7 @@ export const SPACE_TRACKS: TrackDef[] = [
       ],
       ramps: [{ at: 0.2 }, { at: 0.7 }],
     },
-    theme: { sky: '#3a2414', ground: '#d6c23f', road: '#4d4033', scenery: 'volcanoes', ponds: 'lava', weather: 'embers' },
+    theme: { sky: '#3a2414', ground: '#d6c23f', road: '#4d4033', scenery: 'volcanoes', ponds: 'lava', weather: 'embers', meteors: true },
   },
   {
     id: 'europa',
@@ -113,12 +101,8 @@ export const SPACE_TRACKS: TrackDef[] = [
       [70, 40], [30, 24], [-10, 44], [-50, 26], [-90, 42], [-122, 14],
     ]),
     layout: {
-      hazards: [
-        { kind: 'puddle', at: 0.03, lateral: -3, radius: 2 },
-        { kind: 'oil', at: 0.41, lateral: 3.4, radius: 1.6 },
-        { kind: 'puddle', at: 0.5, lateral: -2.8, radius: 2 },
-        { kind: 'oil', at: 0.93, lateral: 3, radius: 1.6 },
-      ],
+      hazards: [],
+      hazardZones: hazardZones(6, [0.03, 0.41, 0.5, 0.965], 0.01),
       pickups: [
         ...pickupRow(0.14, ['missile', 'bomb', 'missile']),
         ...pickupRow(0.45, ['bomb', 'missile', 'bomb']),
@@ -132,6 +116,6 @@ export const SPACE_TRACKS: TrackDef[] = [
       ],
       ramps: [{ at: 0.19 }, { at: 0.62 }, { at: 0.78 }],
     },
-    theme: { sky: '#0b1030', ground: '#dbe9f2', road: '#3b4d66', scenery: 'ice', weather: 'glitter' },
+    theme: { sky: '#0b1030', ground: '#dbe9f2', road: '#3b4d66', scenery: 'ice', weather: 'glitter', meteors: true },
   },
 ];

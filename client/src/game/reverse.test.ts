@@ -55,6 +55,16 @@ describe.each(FORWARD_TRACKS.map((forward, i) => ({ name: forward.name, forward,
     }
   });
 
+  it('keeps every hazard zone on the same stretch of road, the same size', () => {
+    const zones = forward.layout.hazardZones ?? [];
+    expect(reversed.layout.hazardZones).toHaveLength(zones.length);
+    zones.forEach((zone, i) => {
+      const now = reversed.layout.hazardZones![i];
+      expect(distance(worldSpot(forward, zone.at, 0), worldSpot(reversed, now.at, 0))).toBeLessThan(0.75);
+      expect([now.reach, now.room]).toEqual([zone.reach, zone.room]);
+    });
+  });
+
   it('keeps every ramp on the same stretch of road, facing the other way', () => {
     const was = buildRamps(pathOf(forward), forward.layout.ramps ?? []);
     const now = buildRamps(pathOf(reversed), reversed.layout.ramps ?? []);

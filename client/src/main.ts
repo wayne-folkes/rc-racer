@@ -31,6 +31,7 @@ import { buildTrackScene, disposeScene } from './game/trackScene';
 import { buildGridLabel } from './game/gridLabel';
 import { TouchControls } from './game/touch';
 import type { VehicleId } from './game/vehicles';
+import { createMeteors, type MeteorScene } from './game/meteorScene';
 import { createWeather, type WeatherScene } from './game/weatherScene';
 import { NO_INPUT, RaceWorld, type Racer } from './game/world';
 import { BackCard, type MenuCard } from './ui/card';
@@ -127,6 +128,7 @@ let track: TrackPath;
 let world: RaceWorld;
 let itemScene: ItemScene;
 let weather: WeatherScene | null = null;
+let meteors: MeteorScene | null = null;
 let trackScene: Group | null = null;
 let rampScene: Group | null = null;
 let carViews: CarView[] = [];
@@ -261,6 +263,12 @@ function clearRace(): void {
     weather.dispose();
     weather = null;
   }
+  if (meteors) {
+    scene.remove(meteors.root);
+    disposeScene(meteors.root);
+    meteors.dispose();
+    meteors = null;
+  }
   carViews = [];
   gridLabel = null;
   trackScene = null;
@@ -305,6 +313,8 @@ function buildRace(def: TrackDef, mode: BuildMode): void {
   carViews[0].model.root.add(gridLabel);
   weather = createWeather(def.theme.weather, raceCount);
   if (weather) scene.add(weather.root);
+  meteors = def.theme.meteors ? createMeteors(track, def.theme.ground, raceCount) : null;
+  if (meteors) scene.add(meteors.root);
   scene.background = new Color(def.theme.sky);
 
   const number = season.tracks.indexOf(def) + 1;
@@ -1057,6 +1067,7 @@ function frame(now: number): void {
   updateEngines();
   // Ambient, so it keeps moving behind the garage and results cards too.
   weather?.update(simDt, world.player.x, world.player.z);
+  meteors?.update(simDt, world.player.x, world.player.z);
   // The grid label stays up until the lights go out, in a race you're driving.
   if (gridLabel) gridLabel.visible = live && !demo && world.race.phase === 'countdown';
   // carViews are in the same order as world.racers, so index i matches world.items.status[i].

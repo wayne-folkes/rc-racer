@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createCar, DEFAULT_TUNING, speed, stepCar, type CarState } from './carPhysics';
-import { BOOST_TIME, ItemSystem, pickupRow, SPIN_TIME, type ItemEvent, type TrackLayout } from './items';
+import { BOOST_TIME, HAZARD_RADIUS, hazardZones, ItemSystem, pickupRow, SPIN_TIME, type ItemEvent, type TrackLayout } from './items';
 import { DEMO_TRACK, TrackPath } from './trackPath';
 import { effectiveTuning, NO_INPUT, RaceWorld } from './world';
 
@@ -175,6 +175,45 @@ describe('boost', () => {
     }
     // Four cars, three laps, three pads: they shouldn't all be ignored.
     expect(boosts).toBeGreaterThan(6);
+  });
+});
+
+describe('hazard zones', () => {
+  const zones: TrackLayout = { hazards: [], hazardZones: hazardZones(5.5, [0.2, 0.5, 0.8]), pickups: [], boostPads: [] };
+  const rolled = (seed: number) => new ItemSystem(track, 1, zones, seed).hazards;
+
+  it('give each zone one hazard, inside the zone and on the road', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const hazards = rolled(seed);
+      expect(hazards).toHaveLength(3);
+      hazards.forEach((h, i) => {
+        const zone = zones.hazardZones![i];
+        const { distance, lateral } = track.project(h.x, h.z);
+        expect(Math.abs(distance / track.length - zone.at)).toBeLessThanOrEqual(zone.reach + 1e-3);
+        expect(Math.abs(lateral)).toBeLessThanOrEqual(zone.room + 1e-3);
+        const [min, max] = HAZARD_RADIUS[h.kind];
+        expect(h.radius).toBeGreaterThanOrEqual(min);
+        expect(h.radius).toBeLessThanOrEqual(max);
+      });
+    }
+  });
+
+  it('roll the same for the same seed, and differently for another', () => {
+    expect(rolled(5)).toEqual(rolled(5));
+    expect(rolled(5)).not.toEqual(rolled(6));
+  });
+
+  it('turn up as both oil and puddles, in different spots from race to race', () => {
+    const all = Array.from({ length: 40 }, (_, seed) => rolled(seed + 1)).flat();
+    expect(new Set(all.map((h) => h.kind))).toEqual(new Set(['oil', 'puddle']));
+    expect(new Set(all.map((h) => h.x.toFixed(1))).size).toBeGreaterThan(60);
+  });
+
+  it('are not rerolled when the race restarts', () => {
+    const world = new RaceWorld(track, { layout: zones, seed: 3 });
+    const before = structuredClone(world.items.hazards);
+    world.restart();
+    expect(world.items.hazards).toEqual(before);
   });
 });
 

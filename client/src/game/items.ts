@@ -21,12 +21,29 @@ export interface HazardSpec extends TrackSpot {
   radius: number;
 }
 
+/**
+ * A stretch of road where one hazard turns up each race. Its kind, size and exact spot are drawn at
+ * random, so the road is never quite the same twice. Like a fixed hazard it sits on a steady part of
+ * the racing line, and the whole stretch has to be steady.
+ */
+export interface HazardZone {
+  /** Centre of the stretch, as a fraction of the lap. */
+  at: number;
+  /** How far either side of the centre a hazard may land, as a fraction of the lap. */
+  reach: number;
+  /** A hazard lands anywhere up to this many metres either side of the centreline. */
+  room: number;
+}
+
 export interface PickupSpec extends TrackSpot {
   kind: ItemKind;
 }
 
 export interface TrackLayout {
+  /** Hazards that are always in the same place. */
   hazards: HazardSpec[];
+  /** Stretches that each get a randomly placed hazard when a race is built. */
+  hazardZones?: HazardZone[];
   pickups: PickupSpec[];
   /** Strips on the road that boost any car driving over them. */
   boostPads: TrackSpot[];
@@ -40,15 +57,34 @@ export function pickupRow(at: number, kinds: [ItemKind, ItemKind, ItemKind]): Pi
   return kinds.map((kind, k) => ({ kind, at, lateral: (k - 1) * PICKUP_SPACING }));
 }
 
+/** Zones for a track this wide: a stretch around each `at`, with the hazard kept off the walls. */
+export function hazardZones(halfWidth: number, ats: number[], reach = 0.015): HazardZone[] {
+  return ats.map((at) => ({ at, reach, room: halfWidth - 2.2 }));
+}
+
+/** Oil patches are smaller than puddles; each is drawn from its own range. */
+export const HAZARD_RADIUS: Record<HazardKind, [number, number]> = {
+  oil: [1.4, 1.8],
+  puddle: [1.8, 2.4],
+};
+
+/** Picks a hazard's kind, size and spot within its zone. */
+export function rollHazard(zone: HazardZone, rand: () => number): HazardSpec {
+  const kind: HazardKind = rand() < 0.5 ? 'oil' : 'puddle';
+  const [min, max] = HAZARD_RADIUS[kind];
+  return {
+    kind,
+    radius: min + rand() * (max - min),
+    at: zone.at + (rand() * 2 - 1) * zone.reach,
+    lateral: (rand() * 2 - 1) * zone.room,
+  };
+}
+
 // Hazards sit on steady stretches of the racing line, so there's always time to pick a way
 // round; one on a line that's swinging across the road (like the S-bend) can't be avoided.
 export const DEMO_LAYOUT: TrackLayout = {
-  hazards: [
-    { kind: 'puddle', at: 0.15, lateral: -1, radius: 2.2 },
-    { kind: 'oil', at: 0.23, lateral: 2.6, radius: 1.6 },
-    { kind: 'puddle', at: 0.66, lateral: 2.4, radius: 2 },
-    { kind: 'oil', at: 0.82, lateral: -2, radius: 1.6 },
-  ],
+  hazards: [],
+  hazardZones: hazardZones(5.5, [0.163, 0.23, 0.68, 0.82]),
   // Each row mixes the items, so taking one means picking a line.
   pickups: [...pickupRow(0.06, ['missile', 'bomb', 'missile']), ...pickupRow(0.47, ['bomb', 'missile', 'bomb'])],
   // Off the racing line, at the start of fast stretches: worth a detour, but it is one.
@@ -156,6 +192,9 @@ const OIL_KICK = 0.35;
 /** Cars touch a hazard when their centre is within its radius plus this. */
 const CAR_HALF_WIDTH = 0.6;
 
+/** Mixed into the race seed for the hazard dice. */
+const HAZARD_SEED = 0x68a3f1;
+
 /** Small seeded random number generator, so races (and tests) are repeatable. */
 export function seededRandom(seed: number): () => number {
   let a = seed >>> 0;
@@ -203,7 +242,10 @@ export class ItemSystem {
     private readonly seed = 1,
   ) {
     this.rng = seededRandom(seed);
-    this.hazards = layout.hazards.map((h) => ({ kind: h.kind, radius: h.radius, ...spotToWorld(track, h) }));
+    // Zones are rolled once, here, from their own stream so the item boxes' dice are untouched.
+    const hazardDice = seededRandom(seed ^ HAZARD_SEED);
+    const rolled = (layout.hazardZones ?? []).map((zone) => rollHazard(zone, hazardDice));
+    this.hazards = [...layout.hazards, ...rolled].map((h) => ({ kind: h.kind, radius: h.radius, ...spotToWorld(track, h) }));
     this.pickups = layout.pickups.map((p) => ({
       id: this.nextId++,
       kind: p.kind,
