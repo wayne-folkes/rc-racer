@@ -1,24 +1,40 @@
 import type { CarInput } from './carPhysics';
 import type { Action, InputSource } from './controls';
 
-// On-screen controls for touch screens. A steering pad sits under the left thumb; gas, brake,
+// On-screen controls for touch screens. A joystick sits under the left thumb; gas, brake,
 // drift and item sit under the right, with reset and pause small in the top-right corner.
-// Every pointer is tracked by its id, so a thumb can slide across the steering pad and several
-// buttons can be held at once. The overlay only shows on touch devices.
+// Every pointer is tracked by its id, so a thumb can slide off the joystick or a button and
+// several buttons can be held at once. The overlay only shows on touch devices.
 
-type Hold = 'left' | 'right' | 'gas' | 'brake' | 'drift';
+type Hold = 'gas' | 'brake' | 'drift';
 type Tap = Extract<Action, 'fire' | 'reset' | 'pause'>;
+
+/** Pushing the stick less than this far (of full travel) steers nothing, so a resting thumb doesn't wander. */
+export const STICK_DEADZONE = 0.12;
+
+/** How hard to steer, from -1 to 1, with the knob this far to the right of centre (negative: left). */
+export function stickSteer(dx: number, travel: number): number {
+  const pushed = Math.max(-1, Math.min(1, dx / travel));
+  const beyond = (Math.abs(pushed) - STICK_DEADZONE) / (1 - STICK_DEADZONE);
+  return beyond <= 0 ? 0 : Math.sign(pushed) * beyond;
+}
+
+/** Where the knob is drawn: the thumb's offset from the centre, held inside the stick's travel. */
+export function stickKnob(dx: number, dy: number, travel: number): { x: number; y: number } {
+  const length = Math.hypot(dx, dy);
+  if (length <= travel) return { x: dx, y: dy };
+  return { x: (dx / length) * travel, y: (dy / length) * travel };
+}
 
 interface Press {
   el: HTMLElement;
-  /** On the steering pad: which half the pointer is over. */
-  side?: 'left' | 'right';
+  /** On the joystick: the steering this pointer asks for. */
+  steer?: number;
 }
 
 const MARKUP = `
-<div class="touch-steer" data-steer aria-label="Steer">
-  <span class="touch-half" data-side="left" aria-hidden="true">◀</span>
-  <span class="touch-half" data-side="right" aria-hidden="true">▶</span>
+<div class="touch-stick" data-stick aria-label="Steer">
+  <span class="touch-knob" aria-hidden="true"></span>
 </div>
 <div class="touch-right">
   <button type="button" class="touch-btn touch-item" data-tap="fire" aria-label="Use item">ITEM</button>
@@ -71,6 +87,10 @@ export class TouchControls implements InputSource {
     }
     // A long press would otherwise bring up the browser's context menu.
     this.root.addEventListener('contextmenu', (e) => e.preventDefault());
+    // iOS Safari zooms on a pinch whatever the viewport says, and the game uses two thumbs at once.
+    for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
+      document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+    }
     // Switching away never sends pointerup, so let go of everything.
     window.addEventListener('blur', () => this.releaseAll());
   }
@@ -90,9 +110,10 @@ export class TouchControls implements InputSource {
 
   carInput(): CarInput {
     const held = this.holds();
+    const steers = [...this.presses.values()].map((press) => press.steer ?? 0);
     return {
       throttle: (held.has('gas') ? 1 : 0) - (held.has('brake') ? 1 : 0),
-      steer: (held.has('right') ? 1 : 0) - (held.has('left') ? 1 : 0),
+      steer: steers.reduce((best, s) => (Math.abs(s) > Math.abs(best) ? s : best), 0),
       handbrake: held.has('drift'),
     };
   }
@@ -117,14 +138,14 @@ export class TouchControls implements InputSource {
 
   private onDown(e: PointerEvent): void {
     const target = e.target as Element;
-    const el = target.closest<HTMLElement>('[data-steer]') ?? target.closest<HTMLElement>('[data-hold],[data-tap]');
+    const el = target.closest<HTMLElement>('[data-stick]') ?? target.closest<HTMLElement>('[data-hold],[data-tap]');
     if (!el) return;
     e.preventDefault();
     // Keep receiving this pointer's moves and release even when it slides off the button.
     el.setPointerCapture(e.pointerId);
     const press: Press = { el };
-    if (el.hasAttribute('data-steer')) press.side = this.sideAt(el, e.clientX);
     this.presses.set(e.pointerId, press);
+    if (el.hasAttribute('data-stick')) this.moveStick(press, e);
     const tap = el.dataset.tap as Tap | undefined;
     if (tap) this.tapped.add(tap);
     this.used = true;
@@ -133,10 +154,21 @@ export class TouchControls implements InputSource {
 
   private onMove(e: PointerEvent): void {
     const press = this.presses.get(e.pointerId);
-    if (!press?.el.hasAttribute('data-steer')) return;
-    const side = this.sideAt(press.el, e.clientX);
-    if (side === press.side) return;
-    press.side = side;
+    if (press?.el.hasAttribute('data-stick')) this.moveStick(press, e);
+  }
+
+  /** Steers by how far the thumb is from the stick's centre, and moves the knob under it. */
+  private moveStick(press: Press, e: PointerEvent): void {
+    const stick = press.el;
+    const knob = stick.querySelector<HTMLElement>('.touch-knob')!;
+    const rect = stick.getBoundingClientRect();
+    const travel = (rect.width - knob.getBoundingClientRect().width) / 2;
+    const dx = e.clientX - (rect.left + rect.width / 2);
+    const dy = e.clientY - (rect.top + rect.height / 2);
+    press.steer = stickSteer(dx, travel);
+    const at = stickKnob(dx, dy, travel);
+    knob.style.setProperty('--knob-x', `${at.x}px`);
+    knob.style.setProperty('--knob-y', `${at.y}px`);
     this.paint();
   }
 
@@ -151,15 +183,10 @@ export class TouchControls implements InputSource {
     this.paint();
   }
 
-  private sideAt(el: HTMLElement, x: number): 'left' | 'right' {
-    const rect = el.getBoundingClientRect();
-    return x < rect.left + rect.width / 2 ? 'left' : 'right';
-  }
-
   private holds(): Set<Hold> {
     const held = new Set<Hold>();
     for (const press of this.presses.values()) {
-      const hold = press.side ?? (press.el.dataset.hold as Hold | undefined);
+      const hold = press.el.dataset.hold as Hold | undefined;
       if (hold) held.add(hold);
     }
     return held;
@@ -169,9 +196,15 @@ export class TouchControls implements InputSource {
   private paint(): void {
     const held = this.holds();
     const touched = new Set([...this.presses.values()].map((press) => press.el));
-    for (const el of this.root.querySelectorAll<HTMLElement>('[data-hold],[data-side],[data-tap]')) {
-      const on = el.dataset.tap ? touched.has(el) : held.has((el.dataset.hold ?? el.dataset.side) as Hold);
+    for (const el of this.root.querySelectorAll<HTMLElement>('[data-hold],[data-tap],[data-stick]')) {
+      const on = el.dataset.hold ? held.has(el.dataset.hold as Hold) : touched.has(el);
       el.classList.toggle('is-pressed', on);
+    }
+    // A knob with nothing on it springs back to the middle.
+    const knob = this.root.querySelector<HTMLElement>('.touch-knob')!;
+    if (![...touched].some((el) => el.hasAttribute('data-stick'))) {
+      knob.style.removeProperty('--knob-x');
+      knob.style.removeProperty('--knob-y');
     }
   }
 }

@@ -68,7 +68,7 @@ others. It rumbles when you're hit.
 
 ### Touch
 
-On touch screens an on-screen steering pad sits under your left thumb, with gas, brake, drift and
+On touch screens an on-screen joystick sits under your left thumb (the further you push it, the harder you steer), with gas, brake, drift and
 item buttons under your right, and small reset and pause buttons in the top-right corner.
 
 ## Deploy
