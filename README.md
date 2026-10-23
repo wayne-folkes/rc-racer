@@ -99,6 +99,7 @@ which builds `client/` as a static site (`vercel.json`). Pull requests get previ
   merged into one set of controls.
 - `client/src/game/audio.ts`: engine notes and sound effects, synthesized with the Web Audio API (no
   sound files).
+- `client/src/game/minimapLayout.ts`, `client/src/ui/minimap.ts`: the mini map of the track and cars, shown on wide screens with a mouse.
 - `client/src/game/carModel.ts`, `trackScene.ts`, `itemScene.ts`, `weatherScene.ts`, `meteorScene.ts`, `followCamera.ts`:
   visuals.
 
