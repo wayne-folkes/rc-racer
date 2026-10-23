@@ -221,7 +221,7 @@ const titleCard = new TitleCard(titleInfo, {
   settings: () => openSettings(true),
   howToPlay: () => pushCard(howtoCard),
 });
-const recordsCard = new RecordsCard(popCard);
+const recordsCard = new RecordsCard(popCard, () => season.state.vehicle);
 const howtoCard = new BackCard('howto', 'howto-back', popCard);
 const settingsCard = new SettingsCard(sound, {
   back: popCard,
@@ -704,7 +704,12 @@ function updateStandings(): void {
 function showResults(): void {
   const raceTime = world.race.finishTime ?? world.race.clock;
   const bestLap = world.race.player.bestLap;
-  const { previous, records, newRaceRecord, newLapRecord } = updateRecords(season.track.id, raceTime, bestLap);
+  const { previous, records, newRaceRecord, newLapRecord } = updateRecords(
+    season.state.vehicle,
+    season.track.id,
+    raceTime,
+    bestLap,
+  );
 
   season.finishRace(world.race.position(0), raceTime);
   persist();

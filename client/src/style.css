@@ -514,8 +514,10 @@ body {
 
 .results-button:focus-visible,
 .upgrade-buy:focus-visible,
+.records-tab:focus-visible,
 .results-button.is-menu-focus,
-.upgrade-buy.is-menu-focus {
+.upgrade-buy.is-menu-focus,
+.records-tab.is-menu-focus {
   outline: 3px solid var(--hud-text);
   outline-offset: 3px;
 }
@@ -551,6 +553,32 @@ body {
   margin: 0 0 22px;
   color: var(--hud-muted);
   font-size: 15px;
+}
+
+.records-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.records-tab {
+  flex: 1;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--hud-text);
+  box-shadow: inset 0 0 0 2px var(--panel-line);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.records-tab[aria-pressed='true'] {
+  background: var(--hud-accent);
+  color: var(--ink);
+  box-shadow: none;
 }
 
 .records-list {
