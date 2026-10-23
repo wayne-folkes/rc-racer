@@ -1,5 +1,7 @@
 # RC Racer
 
+[![CI](https://github.com/wayne-folkes/rc-racer/actions/workflows/ci.yml/badge.svg)](https://github.com/wayne-folkes/rc-racer/actions/workflows/ci.yml)
+
 A browser racing game in the spirit of RC Pro-Am: low-poly RC cars on a track seen from a fixed
 3/4 camera. TypeScript + Vite + Three.js, no backend yet.
 
@@ -95,6 +97,12 @@ which builds `client/` as a static site (`vercel.json`). Pull requests get previ
   sound files).
 - `client/src/game/carModel.ts`, `trackScene.ts`, `itemScene.ts`, `weatherScene.ts`, `followCamera.ts`:
   visuals.
+
+## Contributing
+
+Contributions are welcome, from bug fixes to new tracks. See [CONTRIBUTING.md](CONTRIBUTING.md) for how
+to get started, and please follow the [Code of Conduct](CODE_OF_CONDUCT.md). The title screen's
+"Contribute on GitHub" link brings you here.
 
 ## Roadmap
 
