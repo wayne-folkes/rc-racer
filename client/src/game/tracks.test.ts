@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RAMP_LENGTH } from './jumps';
 import { buildRacingLine } from './racingLine';
+import { gridPosition, OPPONENTS, PLAYER, SLOT_LENGTH, SLOT_WIDTH } from './racers';
 import { TRACKS } from './tracks';
 import { TrackPath } from './trackPath';
 import { NO_INPUT, RaceWorld } from './world';
@@ -36,6 +37,16 @@ describe.each(TRACKS)('$name', (def) => {
     const room = track.halfWidth - 1.2;
     for (const spot of [...def.layout.pickups, ...def.layout.boostPads, ...def.layout.hazards]) {
       expect(Math.abs(spot.lateral)).toBeLessThanOrEqual(room);
+    }
+  });
+
+  it('fits every starting pad on the road and behind the start line', () => {
+    const startLineHalfDepth = 0.7;
+    for (const { gridSlot } of [PLAYER, ...OPPONENTS]) {
+      const { x, z } = gridPosition(track, gridSlot);
+      const { lateral, distance } = track.project(x, z);
+      expect(Math.abs(lateral) + SLOT_WIDTH / 2, `slot ${gridSlot} across`).toBeLessThan(track.halfWidth);
+      expect(track.length - distance - SLOT_LENGTH / 2, `slot ${gridSlot} along`).toBeGreaterThan(startLineHalfDepth);
     }
   });
 
