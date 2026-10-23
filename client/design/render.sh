@@ -5,6 +5,8 @@
 #   apple-touch-icon.png 180x180, full-bleed square (no rounded corners, no transparency)
 #   icon-512.png         512x512 from favicon.svg
 #   og.png               1200x630 from og.html
+#   social-preview.png   1280x640 from social.html, written here in design/ (not shipped with the site);
+#                        upload it under the GitHub repo's Settings > Social preview
 # Needs Google Chrome in /Applications. Override with CHROME=/path/to/chrome.
 set -euo pipefail
 
@@ -58,6 +60,9 @@ shot "$TMP/icon-512.html" 512 512 "$PUBLIC_DIR/icon-512.png"
 
 # Link preview: rendered straight from the design source
 shot "$DESIGN_DIR/og.html" 1200 630 "$PUBLIC_DIR/og.png"
+
+# GitHub social preview (repo Settings > Social preview takes a 1280x640 PNG under 1 MB)
+shot "$DESIGN_DIR/social.html" 1280 640 "$DESIGN_DIR/social-preview.png"
 
 for f in favicon-32.png apple-touch-icon.png icon-512.png og.png; do
   sips -g pixelWidth -g pixelHeight "$PUBLIC_DIR/$f" | tail -n 2
