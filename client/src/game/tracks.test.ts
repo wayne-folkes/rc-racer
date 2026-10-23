@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RAMP_LENGTH } from './jumps';
 import { buildRacingLine } from './racingLine';
 import { TRACKS } from './tracks';
 import { TrackPath } from './trackPath';
@@ -44,6 +45,27 @@ describe.each(TRACKS)('$name', (def) => {
       const reach = Math.round(20 / (track.length / n));
       const offsets = Array.from({ length: 2 * reach + 1 }, (_, k) => line.offsets[(centre - reach + k + n) % n]);
       expect(Math.max(...offsets) - Math.min(...offsets)).toBeLessThan(2.5);
+    }
+  });
+
+  it('only puts ramps on straight-ish stretches, clear of pads, pickups and hazards', () => {
+    const spacing = track.length / n;
+    for (const ramp of def.layout.ramps ?? []) {
+      const foot = ramp.at * track.length;
+      // From just before the ramp to well past the landing: fast, with a steady line.
+      const window = Array.from({ length: Math.round(30 / spacing) }, (_, k) => {
+        const i = (Math.round((foot - 5) / spacing) + k + n) % n;
+        return { speed: line.targetSpeed[i], offset: line.offsets[i] };
+      });
+      expect(Math.min(...window.map((w) => w.speed))).toBeGreaterThan(20);
+      const offsets = window.map((w) => w.offset);
+      expect(Math.max(...offsets) - Math.min(...offsets)).toBeLessThan(2.5);
+
+      // Nothing sits on the ramp itself.
+      for (const spot of [...def.layout.pickups, ...def.layout.boostPads, ...def.layout.hazards]) {
+        const along = (((spot.at * track.length - foot) % track.length) + track.length) % track.length;
+        expect(along > RAMP_LENGTH + 1 && along < track.length - 3).toBe(true);
+      }
     }
   });
 

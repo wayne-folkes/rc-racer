@@ -39,6 +39,8 @@ which builds `client/` as a static site (`vercel.json`). Pull requests get previ
 - `client/src/game/world.ts`: the whole race simulation (cars, AI, collisions, rules) without rendering.
 - `client/src/game/racingLine.ts`, `aiDriver.ts`, `racers.ts`: AI racing line, driving, opponents and grid.
 - `client/src/game/items.ts`: pickups, missiles, bombs, boost pads, oil and puddles, and the demo layout.
+- `client/src/game/jumps.ts`: ramps, car height and jumping. Airborne cars can't steer and pass over
+  pickups, hazards, bombs and other cars.
 - `client/src/game/tracks.ts`: the season's four tracks, each with its layout and theme. `tracks.test.ts`
   checks every track (corner radii, spacing, hazard placement, a full AI race).
 - `client/src/game/season.ts`, `seasonStorage.ts`: season rules (prize money, upgrades, difficulty per
@@ -57,5 +59,5 @@ which builds `client/` as a static site (`vercel.json`). Pull requests get previ
 3. AI opponents following the racing line, race positions. **(done)**
 4. Pickups and weapons (missiles, bombs), boost pads, oil slicks and puddles. **(done)**
 5. Progression: several tracks, upgrades between races, top-3-or-game-over. **(done)**
-6. Polish: sound, gamepad and touch controls, title and pause menus **(done)**; ramps and jumps, track
+6. Polish: sound, gamepad and touch controls, title and pause menus, ramps and jumps **(done)**; track
    editor.

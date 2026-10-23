@@ -370,6 +370,11 @@ export class ItemScene {
     }
   }
 
+  /** A puff of dust where a car comes down off a jump. */
+  landed(x: number, z: number): void {
+    this.addEffect(this.landingDust(x, z));
+  }
+
   /** Removes every missile, bomb and effect, for a new race. */
   reset(): void {
     this.prune(this.missiles, new Set());
@@ -621,6 +626,52 @@ export class ItemScene {
         root.scale.setScalar(0.6 + 1.2 * t);
         root.position.y = 0.35 + 0.3 * t;
         mat.opacity = 0.7 * (1 - t);
+      },
+    };
+  }
+
+  /** Like the oil puff, but pale tan and wider, with a ring of grit thrown out from the wheels. */
+  private landingDust(x: number, z: number): Effect {
+    const materials: Material[] = [];
+    const mat = own(materials, new MeshBasicMaterial({ color: '#d9cba9', transparent: true, depthWrite: false }));
+    const root = new Group();
+    root.position.set(x, 0, z);
+    const cloud = new Group();
+    cloud.position.y = 0.3;
+    for (const [ox, oy, oz, r] of [
+      [0, 0, 0, 0.5],
+      [0.35, 0.05, 0.2, 0.4],
+      [-0.3, 0.05, -0.25, 0.42],
+    ]) {
+      const ball = new Mesh(this.assets.sphere, mat);
+      ball.position.set(ox, oy, oz);
+      ball.scale.setScalar(r);
+      cloud.add(ball);
+    }
+    root.add(cloud);
+
+    const specks = Array.from({ length: 10 }, (_, i) => {
+      const speck = new Mesh(this.assets.sphere, mat);
+      speck.scale.setScalar(0.1);
+      root.add(speck);
+      return { speck, angle: (i / 10) * Math.PI * 2 + Math.random() * 0.3 };
+    });
+
+    return {
+      root,
+      life: 0.7,
+      age: 0,
+      materials,
+      step: (t) => {
+        cloud.scale.setScalar(0.6 + 1.2 * easeOutQuad(t));
+        cloud.position.y = 0.3 + 0.25 * t;
+        mat.opacity = 0.75 * (1 - t);
+        // Each speck arcs out from the middle, then drops back to the road.
+        for (const { speck, angle } of specks) {
+          const r = 0.4 + 2.2 * easeOutQuad(t);
+          speck.position.set(Math.cos(angle) * r, 0.1 + 1.2 * t * (1 - t), Math.sin(angle) * r);
+          speck.scale.setScalar(0.1 * (1 - 0.5 * t));
+        }
       },
     };
   }

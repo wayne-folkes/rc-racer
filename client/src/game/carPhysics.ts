@@ -20,6 +20,10 @@ export interface CarState {
   vz: number;
   /** Smoothed steering input, also used to turn the front wheels. */
   steer: number;
+  /** Height above the ground and vertical speed, for ramps and jumps (see jumps.ts). */
+  y: number;
+  vy: number;
+  airborne: boolean;
 }
 
 export interface CarTuning {
@@ -66,7 +70,7 @@ export const DEFAULT_TUNING: CarTuning = {
 };
 
 export function createCar(x: number, z: number, heading: number): CarState {
-  return { x, z, heading, vx: 0, vz: 0, steer: 0 };
+  return { x, z, heading, vx: 0, vz: 0, steer: 0, y: 0, vy: 0, airborne: false };
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));

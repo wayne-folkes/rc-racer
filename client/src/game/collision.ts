@@ -39,9 +39,13 @@ export function collideWithWalls(car: CarState, track: TrackPath): { proj: Proje
 /** Centre-to-centre distance at which two cars touch. Cars are treated as equal-mass circles. */
 export const CAR_SPACING = 2;
 const CAR_RESTITUTION = 0.3;
+/** Cars further apart in height than this don't touch. */
+const CAR_HEIGHT = 0.8;
 
 /** Separates two overlapping cars and bounces them apart. Returns whether they touched. */
 export function collideCars(a: CarState, b: CarState): boolean {
+  // A car in the air passes over one on the ground.
+  if (Math.abs(a.y - b.y) > CAR_HEIGHT) return false;
   const dx = b.x - a.x;
   const dz = b.z - a.z;
   const dist = Math.hypot(dx, dz);

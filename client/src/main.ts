@@ -19,6 +19,7 @@ import { Keyboard } from './game/input';
 import type { ItemKind } from './game/items';
 import { ItemScene } from './game/itemScene';
 import { formatTime, type RaceEvent } from './game/race';
+import { buildRamps } from './game/rampScene';
 import { updateRecords } from './game/records';
 import { QUALIFYING_POSITION, Season, type SeasonStatus } from './game/season';
 import { loadSeason, saveSeason } from './game/seasonStorage';
@@ -118,6 +119,7 @@ let world: RaceWorld;
 let itemScene: ItemScene;
 let weather: WeatherScene | null = null;
 let trackScene: Group | null = null;
+let rampScene: Group | null = null;
 let carViews: CarView[] = [];
 /** False while the garage or a summary card is up: the scene is built but nothing moves. */
 let live = true;
@@ -234,10 +236,12 @@ const allCards: MenuCard[] = [titleCard, recordsCard, howtoCard, settingsCard, p
 function clearRace(): void {
   if (!trackScene) return;
   const objects = [trackScene, itemScene.root, ...carViews.map((view) => view.model.root)];
+  if (rampScene) objects.push(rampScene);
   for (const object of objects) {
     scene.remove(object);
     disposeScene(object);
   }
+  rampScene = null;
   if (weather) {
     scene.remove(weather.root);
     disposeScene(weather.root);
@@ -268,6 +272,8 @@ function buildRace(def: TrackDef, mode: BuildMode): void {
 
   trackScene = buildTrackScene(track, def.theme);
   scene.add(trackScene);
+  rampScene = buildRamps(world.ramps);
+  scene.add(rampScene);
   itemScene = new ItemScene(world.items);
   scene.add(itemScene.root);
   // One model per racer, in the same order as world.racers, so index 0 is the player.
@@ -468,6 +474,15 @@ function playItemSounds(events: ReturnType<typeof world.items.drainEvents>): voi
     if (!name) continue;
     const distance = Math.hypot(e.x - world.player.x, e.z - world.player.z);
     sound.play(name, distanceVolume(distance) * (demo ? DEMO_SOUND_VOLUME : 1));
+  }
+}
+
+/** Plays jump and landing sounds, quieter the further from the player they happen. A landing also raises dust. */
+function playJumpEvents(events: ReturnType<typeof world.drainJumps>): void {
+  for (const e of events) {
+    if (e.type === 'land') itemScene.landed(e.x, e.z);
+    const distance = Math.hypot(e.x - world.player.x, e.z - world.player.z);
+    sound.play(e.type, distanceVolume(distance) * (demo ? DEMO_SOUND_VOLUME : 1));
   }
 }
 
@@ -985,6 +1000,7 @@ function frame(now: number): void {
   if (!demo && itemEvents.some((event) => event.type === 'explode' && event.victim === 0)) gamepad.rumble(0.8, 250);
   itemScene.handleEvents(itemEvents);
   playItemSounds(itemEvents);
+  playJumpEvents(world.drainJumps());
   updateCountdownBeeps();
   updateEngines();
   // Ambient, so it keeps moving behind the garage and results cards too.

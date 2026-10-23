@@ -8,6 +8,7 @@ import {
   type CarTuning,
 } from './carPhysics';
 import { collideCars, collideWithWalls } from './collision';
+import { airTuning, buildRamps, updateHeight, type JumpEvent, type Ramp } from './jumps';
 import { BOOST_PAD_RADIUS, DEMO_LAYOUT, ItemSystem, SPIN_TIME, type RacerStatus, type TrackLayout } from './items';
 import { Race, TOTAL_LAPS, type RaceEvent } from './race';
 import { buildRacingLine, type RacingLine } from './racingLine';
@@ -73,6 +74,9 @@ export class RaceWorld {
   readonly racers: Racer[];
   race: Race;
   readonly items: ItemSystem;
+  readonly ramps: Ramp[];
+  /** Jumps and landings since the last drainJumps(), for sounds and dust. */
+  private jumps: { type: JumpEvent; racer: number; x: number; z: number }[] = [];
   private readonly playerTuning: CarTuning;
   /** The player's projection onto the track after the last step. */
   playerProj: Projection;
@@ -103,7 +107,9 @@ export class RaceWorld {
       })),
     ];
     this.race = this.newRace();
-    this.items = new ItemSystem(track, this.racers.length, options.layout ?? DEMO_LAYOUT, options.seed);
+    const layout = options.layout ?? DEMO_LAYOUT;
+    this.items = new ItemSystem(track, this.racers.length, layout, options.seed);
+    this.ramps = buildRamps(track, layout.ramps ?? []);
     this.useRequested = this.racers.map(() => false);
     this.projs = this.racers.map((r) => track.project(r.car.x, r.car.z));
     this.playerProj = this.projs[0];
@@ -170,7 +176,9 @@ export class RaceWorld {
       }
 
       const base = racer.driver?.tuning ?? this.playerTuning;
-      stepCar(racer.car, input, dt, effectiveTuning(base, status));
+      // In the air there's nothing to push against: no steering, throttle or grip.
+      if (racer.car.airborne) stepCar(racer.car, NO_INPUT, dt, airTuning(base));
+      else stepCar(racer.car, input, dt, effectiveTuning(base, status));
       if (status.spin > 0) racer.car.heading += SPIN_RATE * (status.spin / SPIN_TIME) * dt;
       if (status.inPuddle) {
         const keep = Math.exp(-PUDDLE_DRAG * dt);
@@ -185,6 +193,10 @@ export class RaceWorld {
 
     this.projs = cars.map((car) => collideWithWalls(car, track).proj);
     this.playerProj = this.projs[0];
+    cars.forEach((car, i) => {
+      const jump = updateHeight(car, this.projs[i], this.ramps, track.length, dt);
+      if (jump) this.jumps.push({ type: jump, racer: i, x: car.x, z: car.z });
+    });
 
     this.useRequested.forEach((wanted, i) => {
       if (!wanted) return;
@@ -195,6 +207,13 @@ export class RaceWorld {
     items.update(dt, cars, this.projs);
 
     return race.update(dt, this.projs.map((p) => p.distance));
+  }
+
+  /** Returns and clears the jumps and landings since the last call. */
+  drainJumps(): { type: JumpEvent; racer: number; x: number; z: number }[] {
+    const jumps = this.jumps;
+    this.jumps = [];
+    return jumps;
   }
 
   /** Oil, puddles and bombs, for the AI to steer around. */

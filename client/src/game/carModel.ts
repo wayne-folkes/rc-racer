@@ -11,6 +11,10 @@ import { forwardSpeed, type CarState } from './carPhysics';
 
 const WHEEL_RADIUS = 0.34;
 const MAX_WHEEL_TURN = 0.5;
+/** The most the nose can tip up or down (rad) on a ramp, a jump or a landing. */
+const MAX_PITCH = 0.35;
+/** How quickly the nose follows the tilt it's aiming for (1/s). */
+const PITCH_RATE = 8;
 
 // A low-poly RC buggy built from boxes and cylinders. The model faces +X.
 export class CarModel {
@@ -18,7 +22,12 @@ export class CarModel {
   private readonly frontPivots: Group[] = [];
   private readonly wheels: Mesh[] = [];
   private readonly body = new Group();
+  /** Body and wheels together, so they tip as one when the car pitches. */
+  private readonly chassis = new Group();
   private readonly boostFlame: Mesh;
+  private pitch = 0;
+  /** Height at the last frame, to work out how fast the car is rising or falling. */
+  private lastY = 0;
 
   constructor(color: ColorRepresentation = '#e63946') {
     const paint = new MeshStandardMaterial({ color, flatShading: true, roughness: 0.5 });
@@ -51,7 +60,8 @@ export class CarModel {
     this.boostFlame.position.set(-1.45, 0.45, 0);
     this.boostFlame.visible = false;
     this.body.add(this.boostFlame);
-    this.root.add(this.body);
+    this.chassis.add(this.body);
+    this.root.add(this.chassis);
 
     const wheelGeom = new CylinderGeometry(WHEEL_RADIUS, WHEEL_RADIUS, 0.32, 10);
     wheelGeom.rotateX(Math.PI / 2);
@@ -66,7 +76,7 @@ export class CarModel {
         wheel.castShadow = true;
         wheel.add(new Mesh(hubGeom, hub));
         pivot.add(wheel);
-        this.root.add(pivot);
+        this.chassis.add(pivot);
         this.wheels.push(wheel);
         if (front) this.frontPivots.push(pivot);
       }
@@ -79,7 +89,7 @@ export class CarModel {
   }
 
   sync(car: CarState, dt: number): void {
-    this.root.position.set(car.x, 0, car.z);
+    this.root.position.set(car.x, car.y, car.z);
     if (this.boostFlame.visible) {
       // Flicker the flame's length and width every frame.
       const length = 0.8 + Math.random() * 0.5;
@@ -96,5 +106,19 @@ export class CarModel {
     // A little body roll into corners sells the motion.
     const roll = car.steer * Math.min(1, Math.abs(forwardSpeed(car)) / 20) * 0.08;
     this.body.rotation.x += (roll - this.body.rotation.x) * Math.min(1, dt * 8);
+
+    // Nose up while climbing, nose down while falling. The tilt is the climb over the forward speed, so
+    // a car on a ramp sits on its slope and a jump follows its arc. The climb comes from the change in
+    // height between frames: on a ramp the sim moves the height without any vertical speed.
+    if (dt > 0) {
+      const climb = (car.y - this.lastY) / dt;
+      this.lastY = car.y;
+      const along = forwardSpeed(car);
+      const aim = Math.atan2(along < 0 ? -climb : climb, Math.abs(along));
+      const target = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, aim));
+      this.pitch += (target - this.pitch) * Math.min(1, dt * PITCH_RATE);
+    }
+    // Positive rotation about Z turns the car's nose (+X) up.
+    this.chassis.rotation.z = this.pitch;
   }
 }

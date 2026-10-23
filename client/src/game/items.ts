@@ -1,4 +1,5 @@
 import type { CarState } from './carPhysics';
+import { clearsGround, type RampSpec } from './jumps';
 import type { Projection, TrackPath } from './trackPath';
 
 // Pickups, weapons, boost pads and track hazards. Pure simulation: the world applies the
@@ -29,6 +30,7 @@ export interface TrackLayout {
   pickups: PickupSpec[];
   /** Strips on the road that boost any car driving over them. */
   boostPads: TrackSpot[];
+  ramps?: RampSpec[];
 }
 
 const PICKUP_SPACING = 3;
@@ -55,6 +57,8 @@ export const DEMO_LAYOUT: TrackLayout = {
     { at: 0.64, lateral: -1 },
     { at: 0.88, lateral: 2.8 },
   ],
+  // The first ramp sits just before the top-straight puddle: a fast car clears it.
+  ramps: [{ at: 0.125 }, { at: 0.74 }],
 };
 
 export interface Hazard {
@@ -133,6 +137,8 @@ const MISSILE_HOMING = 10;
 /** Missiles home in on the nearest car up to this far ahead along the track. */
 const MISSILE_RANGE = 60;
 const MISSILE_HIT_RADIUS = 1.4;
+/** Missiles fly low, but can still clip a car that's only just left the ground. */
+const MISSILE_REACH = 1.3;
 /** Cars touch a boost pad when their centre is within this distance of its middle. */
 export const BOOST_PAD_RADIUS = 1.8;
 const BOMB_DROP_BEHIND = 2.2;
@@ -292,7 +298,8 @@ export class ItemSystem {
   private updateBoostPads(cars: CarState[]): void {
     cars.forEach((car, racer) => {
       const status = this.status[racer];
-      const onPad = this.boostPads.some((p) => Math.hypot(car.x - p.x, car.z - p.z) < BOOST_PAD_RADIUS);
+      const onPad =
+        !clearsGround(car) && this.boostPads.some((p) => Math.hypot(car.x - p.x, car.z - p.z) < BOOST_PAD_RADIUS);
       // A spinning car slides over without picking up the boost.
       if (onPad && !status.onPad && status.spin === 0) {
         status.boost = BOOST_TIME;
@@ -310,7 +317,7 @@ export class ItemSystem {
       }
       // Cars already holding an item drive straight through, leaving it for someone else.
       const racer = cars.findIndex(
-        (c, i) => !this.status[i].item && Math.hypot(c.x - p.x, c.z - p.z) < PICKUP_RADIUS,
+        (c, i) => !this.status[i].item && !clearsGround(c) && Math.hypot(c.x - p.x, c.z - p.z) < PICKUP_RADIUS,
       );
       if (racer < 0) continue;
       p.respawn = PICKUP_RESPAWN;
@@ -335,7 +342,7 @@ export class ItemSystem {
       m.heading = Math.atan2(p.tz, p.tx);
 
       const victim = cars.findIndex(
-        (c, i) => i !== m.owner && Math.hypot(c.x - m.x, c.z - m.z) < MISSILE_HIT_RADIUS,
+        (c, i) => i !== m.owner && c.y < MISSILE_REACH && Math.hypot(c.x - m.x, c.z - m.z) < MISSILE_HIT_RADIUS,
       );
       if (victim >= 0) {
         this.hit(victim, cars[victim]);
@@ -354,7 +361,7 @@ export class ItemSystem {
     this.bombs = this.bombs.filter((b) => {
       b.age += dt;
       if (b.age < BOMB_ARM_TIME) return true;
-      const victim = cars.findIndex((c) => Math.hypot(c.x - b.x, c.z - b.z) < BOMB_HIT_RADIUS);
+      const victim = cars.findIndex((c) => !clearsGround(c) && Math.hypot(c.x - b.x, c.z - b.z) < BOMB_HIT_RADIUS);
       if (victim >= 0) {
         this.hit(victim, cars[victim]);
         this.events.push({ type: 'explode', victim, x: b.x, z: b.z });
@@ -372,6 +379,7 @@ export class ItemSystem {
     cars.forEach((car, racer) => {
       const status = this.status[racer];
       const touching = (kind: HazardKind) =>
+        !clearsGround(car) &&
         this.hazards.some(
           (h) => h.kind === kind && Math.hypot(car.x - h.x, car.z - h.z) < h.radius + CAR_HALF_WIDTH,
         );

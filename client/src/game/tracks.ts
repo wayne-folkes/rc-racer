@@ -60,6 +60,8 @@ export const TRACKS: TrackDef[] = [
         { at: 0.72, lateral: -2 },
         { at: 0.92, lateral: 3.8 },
       ],
+      // Over the top-straight puddle, and straight after a boost pad for a big one.
+      ramps: [{ at: 0.175 }, { at: 0.77 }],
     },
     theme: { sky: '#f2d3a0', ground: '#e0c08a', road: '#5a5048', scenery: 'cacti', weather: 'tumbleweeds' },
   },
@@ -87,6 +89,7 @@ export const TRACKS: TrackDef[] = [
         { at: 0.7, lateral: -2.3 },
         { at: 0.9, lateral: 3 },
       ],
+      ramps: [{ at: 0.1 }, { at: 0.72 }],
     },
     theme: { sky: '#9fd4ef', ground: '#7cc36b', road: '#4a4f5a', scenery: 'trees', ponds: true },
   },
@@ -112,6 +115,8 @@ export const TRACKS: TrackDef[] = [
         { at: 0.58, lateral: -1.6 },
         { at: 0.92, lateral: 2.8 },
       ],
+      // Snow Peak's one proper straight; land short and you're on the ice.
+      ramps: [{ at: 0.135 }],
     },
     theme: { sky: '#c9dbe9', ground: '#eef3f7', road: '#59616e', scenery: 'pines', weather: 'snow' },
   },

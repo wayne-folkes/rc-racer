@@ -16,7 +16,9 @@ export type SoundName =
   | 'skid'
   | 'lap'
   | 'finalLap'
-  | 'finish';
+  | 'finish'
+  | 'jump'
+  | 'land';
 
 export type EngineId = 'player' | 'rival';
 
@@ -172,6 +174,14 @@ export class Sound {
         break;
       case 'skid':
         this.whoosh({ from: 2600, to: 2000, dur: 0.45, vol: 0.18 * v, filter: 'bandpass', q: 8 });
+        break;
+      case 'jump':
+        this.tone({ freq: 220, to: 520, dur: 0.18, type: 'triangle', vol: 0.14 * v });
+        this.whoosh({ from: 800, to: 2400, dur: 0.25, vol: 0.12 * v, filter: 'bandpass', q: 1.5 });
+        break;
+      case 'land':
+        this.tone({ freq: 140, to: 55, dur: 0.18, type: 'sine', vol: 0.45 * v });
+        this.whoosh({ from: 900, to: 200, dur: 0.2, vol: 0.25 * v, filter: 'lowpass', q: 0.7 });
         break;
       case 'lap':
         this.melody([523, 659], 0.1, 0.16 * v);
