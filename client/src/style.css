@@ -265,6 +265,16 @@ body {
   display: none;
 }
 
+/* On a desktop the title steps aside after a while, to show the demo racing behind it. */
+#title {
+  transition: opacity 0.6s ease;
+}
+
+#title.is-away {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .results-card {
   width: calc(100% - 32px);
   max-width: 360px;

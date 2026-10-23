@@ -59,6 +59,11 @@ export class Controls {
     }
   }
 
+  /** True if any device was used since the last endFrame(). */
+  used(): boolean {
+    return this.sources.some((s) => s.active());
+  }
+
   carInput(): CarInput {
     return mergeCarInputs(this.sources.map((s) => s.carInput()));
   }
