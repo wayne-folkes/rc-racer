@@ -17,9 +17,9 @@ export interface Opponent extends RacerInfo {
 export const PLAYER: RacerInfo = { name: 'You', color: '#e63946', gridSlot: 3 };
 
 export const OPPONENTS: Opponent[] = [
-  { name: 'Blue', color: '#3b82f6', gridSlot: 0, skill: { pace: 0.92, steerGain: 2.6 } },
-  { name: 'Yellow', color: '#facc15', gridSlot: 1, skill: { pace: 0.88, steerGain: 2.3 } },
-  { name: 'Green', color: '#22c55e', gridSlot: 2, skill: { pace: 0.84, steerGain: 2.0 } },
+  { name: 'Blue', color: '#3b82f6', gridSlot: 0, skill: { pace: 0.87, steerGain: 2.6 } },
+  { name: 'Yellow', color: '#facc15', gridSlot: 1, skill: { pace: 0.84, steerGain: 2.3 } },
+  { name: 'Green', color: '#22c55e', gridSlot: 2, skill: { pace: 0.81, steerGain: 2.0 } },
 ];
 
 /** Distance behind the finish line of pole position, and between grid rows. */

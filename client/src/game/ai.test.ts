@@ -10,7 +10,7 @@ describe('rubberBand', () => {
     expect(rubberBand(0)).toBe(1);
     expect(rubberBand(-20)).toBeLessThan(1);
     expect(rubberBand(20)).toBeGreaterThan(1);
-    expect(rubberBand(-1000)).toBeGreaterThanOrEqual(0.9);
+    expect(rubberBand(-1000)).toBeGreaterThanOrEqual(0.85);
     expect(rubberBand(1000)).toBeLessThanOrEqual(1.05);
   });
 });

@@ -21,7 +21,16 @@
           <span id="hud-position-total" class="hud-position-total">/ 4</span>
         </div>
       </div>
-      <div class="hud-panel hud-speed"><span id="hud-speed">0</span><span class="hud-label">km/h</span></div>
+      <div class="hud-stack hud-stack-end">
+        <div class="hud-panel hud-speed"><span id="hud-speed">0</span><span class="hud-label">km/h</span></div>
+        <div id="hud-item" class="hud-panel hud-item is-empty">
+          <span id="hud-item-icon" class="hud-item-icon" aria-hidden="true">–</span>
+          <span class="hud-item-text">
+            <span id="hud-item-name" class="hud-item-name">Empty</span>
+            <kbd>X</kbd>
+          </span>
+        </div>
+      </div>
     </div>
     <div id="results" class="results" hidden>
       <div class="results-card" role="dialog" aria-labelledby="results-title">
@@ -52,7 +61,7 @@
     </div>
     <div class="help">
       <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> or <kbd>WASD</kbd> drive · <kbd>Space</kbd> handbrake ·
-      <kbd>R</kbd> reset · <kbd>Enter</kbd> race again
+      <kbd>X</kbd> use item · <kbd>R</kbd> reset · <kbd>Enter</kbd> race again
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

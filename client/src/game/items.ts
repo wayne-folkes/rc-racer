@@ -1,0 +1,365 @@
+import type { CarState } from './carPhysics';
+import type { Projection, TrackPath } from './trackPath';
+
+// Pickups, weapons and track hazards. Pure simulation: the world applies the effects
+// (spins, boosts, slides) to the cars, and the scene draws what's here.
+
+export type ItemKind = 'missile' | 'bomb' | 'boost';
+export const ITEM_KINDS: ItemKind[] = ['missile', 'bomb', 'boost'];
+
+export type HazardKind = 'oil' | 'puddle';
+
+/** A spot on the track: distance as a fraction of the lap, and metres right of the centreline. */
+export interface TrackSpot {
+  at: number;
+  lateral: number;
+}
+
+export interface HazardSpec extends TrackSpot {
+  kind: HazardKind;
+  radius: number;
+}
+
+export interface PickupSpec extends TrackSpot {
+  kind: ItemKind;
+}
+
+export interface TrackLayout {
+  hazards: HazardSpec[];
+  pickups: PickupSpec[];
+}
+
+const PICKUP_SPACING = 3;
+
+/** Three pickups side by side across the track, left to right. */
+export function pickupRow(at: number, kinds: [ItemKind, ItemKind, ItemKind]): PickupSpec[] {
+  return kinds.map((kind, k) => ({ kind, at, lateral: (k - 1) * PICKUP_SPACING }));
+}
+
+// Hazards sit on steady stretches of the racing line, so there's always time to pick a way
+// round; one on a line that's swinging across the road (like the S-bend) can't be avoided.
+export const DEMO_LAYOUT: TrackLayout = {
+  hazards: [
+    { kind: 'puddle', at: 0.15, lateral: -1, radius: 2.2 },
+    { kind: 'oil', at: 0.36, lateral: 1.8, radius: 1.6 },
+    { kind: 'puddle', at: 0.66, lateral: 2.4, radius: 2 },
+    { kind: 'oil', at: 0.82, lateral: -2, radius: 1.6 },
+  ],
+  // Each row mixes the three items, in a different order, so taking one means picking a line.
+  pickups: [...pickupRow(0.06, ['missile', 'boost', 'bomb']), ...pickupRow(0.47, ['bomb', 'missile', 'boost'])],
+};
+
+export interface Hazard {
+  kind: HazardKind;
+  x: number;
+  z: number;
+  radius: number;
+}
+
+/** A pickup shows what it gives, and always gives the same thing. */
+export interface Pickup {
+  id: number;
+  kind: ItemKind;
+  x: number;
+  z: number;
+  /** Seconds until the box is back; 0 means it's there to collect. */
+  respawn: number;
+}
+
+export interface Missile {
+  id: number;
+  owner: number;
+  x: number;
+  z: number;
+  heading: number;
+  /** Missiles fly along the track, so they're tracked in track coordinates. */
+  distance: number;
+  lateral: number;
+  /** Racer it's homing in on, if any. */
+  target: number | null;
+  age: number;
+}
+
+export interface Bomb {
+  id: number;
+  owner: number;
+  x: number;
+  z: number;
+  age: number;
+}
+
+export interface RacerStatus {
+  item: ItemKind | null;
+  /** Seconds the item has been held (the AI waits a moment before using one). */
+  holdTime: number;
+  /** Seconds left spinning out after a hit. Controls don't work while spinning. */
+  spin: number;
+  /** Seconds left of boost. */
+  boost: number;
+  /** Seconds left sliding after hitting oil. */
+  slick: number;
+  inPuddle: boolean;
+  onOil: boolean;
+}
+
+export type ItemEvent =
+  | { type: 'pickup'; racer: number; item: ItemKind; x: number; z: number }
+  | { type: 'fire' | 'drop' | 'boost'; racer: number; x: number; z: number }
+  | { type: 'explode'; victim: number | null; x: number; z: number }
+  | { type: 'slick' | 'splash'; racer: number; x: number; z: number };
+
+const PICKUP_RADIUS = 1.7;
+const PICKUP_RESPAWN = 4;
+const MISSILE_SPEED = 42;
+const MISSILE_LIFE = 2.5;
+/** How fast a missile can move sideways while homing (m/s). */
+const MISSILE_HOMING = 10;
+/** Missiles home in on the nearest car up to this far ahead along the track. */
+const MISSILE_RANGE = 60;
+const MISSILE_HIT_RADIUS = 1.4;
+const BOMB_DROP_BEHIND = 2.2;
+/** Bombs can't go off until they've had time to fall behind the car that dropped them. */
+const BOMB_ARM_TIME = 0.5;
+const BOMB_LIFE = 20;
+const BOMB_HIT_RADIUS = 1.5;
+export const SPIN_TIME = 1.1;
+/** Share of speed kept when hit. */
+const HIT_SPEED_KEEP = 0.35;
+export const BOOST_TIME = 1.6;
+export const SLICK_TIME = 0.9;
+/** Sideways jolt (radians of heading) when running over oil. */
+const OIL_KICK = 0.35;
+/** Cars touch a hazard when their centre is within its radius plus this. */
+const CAR_HALF_WIDTH = 0.6;
+
+/** Small seeded random number generator, so races (and tests) are repeatable. */
+export function seededRandom(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function spotToWorld(track: TrackPath, spot: TrackSpot) {
+  const p = track.pointAt(spot.at * track.length);
+  return { x: p.x - p.tz * spot.lateral, z: p.z + p.tx * spot.lateral };
+}
+
+const freshStatus = (): RacerStatus => ({
+  item: null,
+  holdTime: 0,
+  spin: 0,
+  boost: 0,
+  slick: 0,
+  inPuddle: false,
+  onOil: false,
+});
+
+export class ItemSystem {
+  readonly hazards: Hazard[];
+  readonly pickups: Pickup[];
+  missiles: Missile[] = [];
+  bombs: Bomb[] = [];
+  readonly status: RacerStatus[];
+
+  private events: ItemEvent[] = [];
+  private nextId = 1;
+  private rng: () => number;
+
+  constructor(
+    private readonly track: TrackPath,
+    racerCount: number,
+    layout: TrackLayout = DEMO_LAYOUT,
+    private readonly seed = 1,
+  ) {
+    this.rng = seededRandom(seed);
+    this.hazards = layout.hazards.map((h) => ({ kind: h.kind, radius: h.radius, ...spotToWorld(track, h) }));
+    this.pickups = layout.pickups.map((p) => ({
+      id: this.nextId++,
+      kind: p.kind,
+      respawn: 0,
+      ...spotToWorld(track, p),
+    }));
+    this.status = Array.from({ length: racerCount }, freshStatus);
+  }
+
+  /** Clears everything for a new race. */
+  reset(): void {
+    this.rng = seededRandom(this.seed);
+    this.missiles = [];
+    this.bombs = [];
+    this.events = [];
+    for (const p of this.pickups) p.respawn = 0;
+    for (let i = 0; i < this.status.length; i++) this.status[i] = freshStatus();
+  }
+
+  /** Returns and clears what happened since the last call, for effects and sounds. */
+  drainEvents(): ItemEvent[] {
+    const events = this.events;
+    this.events = [];
+    return events;
+  }
+
+  /** Uses the racer's held item. Returns false if there was nothing to use. */
+  use(racer: number, car: CarState, proj: Projection, projs: Projection[]): boolean {
+    const status = this.status[racer];
+    const item = status.item;
+    if (!item || status.spin > 0) return false;
+    status.item = null;
+    status.holdTime = 0;
+
+    if (item === 'boost') {
+      status.boost = BOOST_TIME;
+      this.events.push({ type: 'boost', racer, x: car.x, z: car.z });
+    } else if (item === 'missile') {
+      const distance = (proj.distance + 2.5) % this.track.length;
+      this.missiles.push({
+        id: this.nextId++,
+        owner: racer,
+        x: car.x,
+        z: car.z,
+        heading: car.heading,
+        distance,
+        lateral: proj.lateral,
+        target: this.nearestAhead(racer, proj.distance, projs),
+        age: 0,
+      });
+      this.events.push({ type: 'fire', racer, x: car.x, z: car.z });
+    } else {
+      const x = car.x - Math.cos(car.heading) * BOMB_DROP_BEHIND;
+      const z = car.z - Math.sin(car.heading) * BOMB_DROP_BEHIND;
+      this.bombs.push({ id: this.nextId++, owner: racer, x, z, age: 0 });
+      this.events.push({ type: 'drop', racer, x, z });
+    }
+    return true;
+  }
+
+  /** The closest other car ahead along the track, within missile range. */
+  private nearestAhead(racer: number, distance: number, projs: Projection[]): number | null {
+    let best: number | null = null;
+    let bestGap = MISSILE_RANGE;
+    projs.forEach((p, i) => {
+      if (i === racer) return;
+      const gap = (((p.distance - distance) % this.track.length) + this.track.length) % this.track.length;
+      if (gap > 0 && gap < bestGap) {
+        best = i;
+        bestGap = gap;
+      }
+    });
+    return best;
+  }
+
+  /** Advances timers, pickups, missiles, bombs and hazards. Hit cars are slowed here. */
+  update(dt: number, cars: CarState[], projs: Projection[]): void {
+    for (const s of this.status) {
+      s.spin = Math.max(0, s.spin - dt);
+      s.boost = Math.max(0, s.boost - dt);
+      s.slick = Math.max(0, s.slick - dt);
+      if (s.item) s.holdTime += dt;
+    }
+    this.updatePickups(dt, cars);
+    this.updateMissiles(dt, cars, projs);
+    this.updateBombs(dt, cars);
+    this.updateHazards(cars);
+  }
+
+  private updatePickups(dt: number, cars: CarState[]): void {
+    for (const p of this.pickups) {
+      if (p.respawn > 0) {
+        p.respawn = Math.max(0, p.respawn - dt);
+        continue;
+      }
+      // Cars already holding an item drive straight through, leaving it for someone else.
+      const racer = cars.findIndex(
+        (c, i) => !this.status[i].item && Math.hypot(c.x - p.x, c.z - p.z) < PICKUP_RADIUS,
+      );
+      if (racer < 0) continue;
+      p.respawn = PICKUP_RESPAWN;
+      this.status[racer].item = p.kind;
+      this.status[racer].holdTime = 0;
+      this.events.push({ type: 'pickup', racer, item: p.kind, x: p.x, z: p.z });
+    }
+  }
+
+  private updateMissiles(dt: number, cars: CarState[], projs: Projection[]): void {
+    const wall = this.track.halfWidth - 0.3;
+    this.missiles = this.missiles.filter((m) => {
+      m.age += dt;
+      m.distance = (m.distance + MISSILE_SPEED * dt) % this.track.length;
+      if (m.target !== null) {
+        const want = projs[m.target].lateral - m.lateral;
+        m.lateral += Math.max(-MISSILE_HOMING * dt, Math.min(MISSILE_HOMING * dt, want));
+      }
+      const p = this.track.pointAt(m.distance);
+      m.x = p.x - p.tz * m.lateral;
+      m.z = p.z + p.tx * m.lateral;
+      m.heading = Math.atan2(p.tz, p.tx);
+
+      const victim = cars.findIndex(
+        (c, i) => i !== m.owner && Math.hypot(c.x - m.x, c.z - m.z) < MISSILE_HIT_RADIUS,
+      );
+      if (victim >= 0) {
+        this.hit(victim, cars[victim]);
+        this.events.push({ type: 'explode', victim, x: m.x, z: m.z });
+        return false;
+      }
+      if (Math.abs(m.lateral) > wall || m.age > MISSILE_LIFE) {
+        this.events.push({ type: 'explode', victim: null, x: m.x, z: m.z });
+        return false;
+      }
+      return true;
+    });
+  }
+
+  private updateBombs(dt: number, cars: CarState[]): void {
+    this.bombs = this.bombs.filter((b) => {
+      b.age += dt;
+      if (b.age < BOMB_ARM_TIME) return true;
+      const victim = cars.findIndex((c) => Math.hypot(c.x - b.x, c.z - b.z) < BOMB_HIT_RADIUS);
+      if (victim >= 0) {
+        this.hit(victim, cars[victim]);
+        this.events.push({ type: 'explode', victim, x: b.x, z: b.z });
+        return false;
+      }
+      if (b.age > BOMB_LIFE) {
+        this.events.push({ type: 'explode', victim: null, x: b.x, z: b.z });
+        return false;
+      }
+      return true;
+    });
+  }
+
+  private updateHazards(cars: CarState[]): void {
+    cars.forEach((car, racer) => {
+      const status = this.status[racer];
+      const touching = (kind: HazardKind) =>
+        this.hazards.some(
+          (h) => h.kind === kind && Math.hypot(car.x - h.x, car.z - h.z) < h.radius + CAR_HALF_WIDTH,
+        );
+
+      const onOil = touching('oil');
+      if (onOil && !status.onOil && Math.hypot(car.vx, car.vz) > 3) {
+        status.slick = SLICK_TIME;
+        car.heading += (this.rng() < 0.5 ? -1 : 1) * OIL_KICK;
+        this.events.push({ type: 'slick', racer, x: car.x, z: car.z });
+      }
+      status.onOil = onOil;
+
+      const inPuddle = touching('puddle');
+      if (inPuddle && !status.inPuddle) this.events.push({ type: 'splash', racer, x: car.x, z: car.z });
+      status.inPuddle = inPuddle;
+    });
+  }
+
+  /** Spins a car out and knocks most of its speed off. */
+  private hit(racer: number, car: CarState): void {
+    this.status[racer].spin = SPIN_TIME;
+    this.status[racer].boost = 0;
+    car.vx *= HIT_SPEED_KEEP;
+    car.vz *= HIT_SPEED_KEEP;
+  }
+}

@@ -34,7 +34,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
  * minus the AI car's, in metres.
  */
 export function rubberBand(gap: number): number {
-  return clamp(1 + gap * 0.002, 0.95, 1.03);
+  return clamp(1 + gap * 0.003, 0.88, 1.03);
 }
 
 export interface AiDecision {
@@ -42,6 +42,20 @@ export interface AiDecision {
   /** The car is stuck or facing backwards and should be put back on the track. */
   respawn: boolean;
 }
+
+/** Something on the track to steer around, like an oil slick or a bomb. */
+export interface Obstacle {
+  /** Distance along the track from the start line. */
+  distance: number;
+  /** Metres right of the centreline. */
+  lateral: number;
+  radius: number;
+}
+
+/** Start steering around obstacles this far ahead. */
+const OBSTACLE_LOOKAHEAD = 24;
+/** Pass obstacles with this much space between their edge and the car's centre. */
+const OBSTACLE_CLEARANCE = 1.8;
 
 interface Traffic {
   /** Sideways position to aim for, in metres right of the centreline. */
@@ -72,8 +86,16 @@ export class AiDriver {
    * @param proj The car's projection onto the track.
    * @param others Every other car, to get around.
    * @param paceBoost Extra pace multiplier, from rubberBand().
+   * @param obstacles Hazards to steer around.
    */
-  drive(car: CarState, proj: Projection, others: CarState[], paceBoost: number, dt: number): AiDecision {
+  drive(
+    car: CarState,
+    proj: Projection,
+    others: CarState[],
+    paceBoost: number,
+    dt: number,
+    obstacles: Obstacle[] = [],
+  ): AiDecision {
     const pace = this.skill.pace * paceBoost;
     this.tuning.maxSpeed = DEFAULT_TUNING.maxSpeed * pace;
 
@@ -84,7 +106,8 @@ export class AiDriver {
     const room = this.track.halfWidth - 1.2;
 
     const traffic = this.traffic(car, proj, others, lineOffset, room, dt);
-    const wantedShift = traffic.offset - lineOffset;
+    const wantedOffset = this.avoidObstacles(proj, obstacles, traffic.offset, room);
+    const wantedShift = wantedOffset - lineOffset;
     this.shift += clamp(wantedShift - this.shift, -LINE_CHANGE_RATE * dt, LINE_CHANGE_RATE * dt);
 
     const offset = clamp(lineOffset + this.shift, -room, room);
@@ -167,6 +190,26 @@ export class AiDriver {
     // Right behind a car with no way round: match its speed rather than ram it.
     const boxedIn = blocker !== null && blocker.ahead < FOLLOW_DISTANCE && Math.abs(blocker.side) < 1.8;
     return { offset, speedCap: boxedIn ? Math.max(0, blocker!.speed - 0.5) : Infinity };
+  }
+
+  /** Moves the aim off any obstacle just up the track that sits where the car is heading. */
+  private avoidObstacles(proj: Projection, obstacles: Obstacle[], offset: number, room: number): number {
+    const length = this.track.length;
+    for (const o of obstacles) {
+      // Measured along the track, so hazards on another part of the circuit never count.
+      const ahead = ((o.distance - proj.distance + 1 + length) % length) - 1;
+      if (ahead > OBSTACLE_LOOKAHEAD) continue;
+      const lateral = o.lateral;
+      const clear = o.radius + OBSTACLE_CLEARANCE;
+      if (Math.abs(offset - lateral) >= clear) continue;
+      // Go round on whichever side is closer to where it was heading, if there's room.
+      const left = lateral - clear;
+      const right = lateral + clear;
+      const preferRight = offset >= lateral;
+      if (preferRight) offset = right <= room ? right : left;
+      else offset = left >= -room ? left : right;
+    }
+    return clamp(offset, -room, room);
   }
 
   private checkStuck(car: CarState, proj: Projection, dt: number): boolean {

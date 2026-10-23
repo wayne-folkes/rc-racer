@@ -1,5 +1,6 @@
 import {
   BoxGeometry,
+  ConeGeometry,
   CylinderGeometry,
   Group,
   Mesh,
@@ -17,6 +18,7 @@ export class CarModel {
   private readonly frontPivots: Group[] = [];
   private readonly wheels: Mesh[] = [];
   private readonly body = new Group();
+  private readonly boostFlame: Mesh;
 
   constructor(color: ColorRepresentation = '#e63946') {
     const paint = new MeshStandardMaterial({ color, flatShading: true, roughness: 0.5 });
@@ -40,6 +42,15 @@ export class CarModel {
     part(0.12, 0.42, 0.12, dark, -0.95, 0.8, 0.35); // wing struts
     part(0.12, 0.42, 0.12, dark, -0.95, 0.8, -0.35);
     part(0.5, 0.06, 1.4, paint, -1.0, 1.03, 0); // rear wing
+
+    // Boost flame, hidden until setBoosting(true). Its tip points back along -X.
+    const flameGeom = new ConeGeometry(0.22, 0.7, 8);
+    flameGeom.rotateZ(Math.PI / 2);
+    const flameMat = new MeshStandardMaterial({ color: '#ffb703', emissive: '#ff6b00', emissiveIntensity: 2.5 });
+    this.boostFlame = new Mesh(flameGeom, flameMat);
+    this.boostFlame.position.set(-1.45, 0.45, 0);
+    this.boostFlame.visible = false;
+    this.body.add(this.boostFlame);
     this.root.add(this.body);
 
     const wheelGeom = new CylinderGeometry(WHEEL_RADIUS, WHEEL_RADIUS, 0.32, 10);
@@ -62,8 +73,19 @@ export class CarModel {
     }
   }
 
+  /** Shows or hides the boost flame. */
+  setBoosting(on: boolean): void {
+    this.boostFlame.visible = on;
+  }
+
   sync(car: CarState, dt: number): void {
     this.root.position.set(car.x, 0, car.z);
+    if (this.boostFlame.visible) {
+      // Flicker the flame's length and width every frame.
+      const length = 0.8 + Math.random() * 0.5;
+      const width = 0.9 + Math.random() * 0.2;
+      this.boostFlame.scale.set(length, width, width);
+    }
     // Heading turns +X towards +Z; Three's Y rotation turns +X towards -Z.
     this.root.rotation.y = -car.heading;
 

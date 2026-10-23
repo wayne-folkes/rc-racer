@@ -12,6 +12,8 @@ import { speed } from './game/carPhysics';
 import { CarModel } from './game/carModel';
 import { FollowCamera } from './game/followCamera';
 import { Keyboard } from './game/input';
+import type { ItemKind } from './game/items';
+import { ItemScene } from './game/itemScene';
 import { formatTime, type RaceEvent } from './game/race';
 import { updateRecords } from './game/records';
 import { buildTrackScene } from './game/trackScene';
@@ -27,6 +29,13 @@ const ORDINAL_SUFFIXES = ['th', 'st', 'nd', 'rd'];
 const WRONG_WAY_DOT = -3;
 /** Seconds of wrong-way driving before the WRONG WAY banner shows. */
 const WRONG_WAY_DELAY = 0.6;
+/** Keys that use the held item. */
+const FIRE_KEYS = ['KeyX', 'ShiftLeft', 'ShiftRight'];
+const ITEM_LABELS: Record<ItemKind, { icon: string; name: string }> = {
+  missile: { icon: '🚀', name: 'Missile' },
+  bomb: { icon: '💣', name: 'Bomb' },
+  boost: { icon: '⚡', name: 'Boost' },
+};
 
 type BannerTone = 'white' | 'green' | 'accent' | 'red';
 interface Banner {
@@ -77,6 +86,9 @@ const carViews = world.racers.map((racer) => {
   return { racer, model };
 });
 
+const itemScene = new ItemScene(world.items);
+scene.add(itemScene.root);
+
 const followCamera = new FollowCamera();
 followCamera.snapTo(world.player);
 
@@ -85,6 +97,7 @@ let wrongWayTime = 0;
 let timedBanner: TimedBanner | null = null;
 let shownBannerKey = '';
 let standingsKey = '';
+let shownItem: ItemKind | null = null;
 
 const hud = {
   lap: document.getElementById('hud-lap')!,
@@ -96,6 +109,12 @@ const hud = {
   speed: document.getElementById('hud-speed')!,
 };
 hud.positionTotal.textContent = `/ ${world.racers.length}`;
+
+const itemSlot = {
+  root: document.getElementById('hud-item')!,
+  icon: document.getElementById('hud-item-icon')!,
+  name: document.getElementById('hud-item-name')!,
+};
 
 const banner = document.getElementById('banner')!;
 
@@ -121,6 +140,7 @@ function resetCar(): void {
 
 function restartRace(): void {
   world.restart();
+  itemScene.reset();
   wrongWayTime = 0;
   timedBanner = null;
   results.root.hidden = true;
@@ -134,7 +154,8 @@ function fixedUpdate(dt: number): void {
 
 /** Counts how long the player's car has been driving against the track direction. */
 function updateWrongWay(dt: number, proj: Projection): void {
-  if (world.race.phase !== 'racing') {
+  // A spinning car is out of control, so it isn't counted as going the wrong way.
+  if (world.race.phase !== 'racing' || world.items.status[0].spin > 0) {
     wrongWayTime = 0;
     return;
   }
@@ -213,6 +234,22 @@ function updateHud(): void {
   hud.best.textContent = best === null ? '--' : formatTime(best);
   hud.position.textContent = ordinal(world.race.position(0));
   hud.speed.textContent = String(Math.round(speed(world.player) * 3.6));
+}
+
+/** Shows the item the player holds, popping the slot whenever a new one arrives. */
+function updateItemSlot(): void {
+  const item = world.items.status[0].item;
+  if (item === shownItem) return;
+  shownItem = item;
+
+  itemSlot.root.classList.toggle('is-empty', item === null);
+  itemSlot.icon.textContent = item ? ITEM_LABELS[item].icon : '–';
+  itemSlot.name.textContent = item ? ITEM_LABELS[item].name : 'Empty';
+  if (!item) return;
+
+  itemSlot.root.classList.remove('pop');
+  void itemSlot.root.offsetWidth;
+  itemSlot.root.classList.add('pop');
 }
 
 /** Under a time: the previous best if this one beat it, otherwise the stored record. */
@@ -308,7 +345,7 @@ results.again.addEventListener('click', restartRace);
 
 // Dev-only handle for poking at game state from the browser console.
 if (import.meta.env.DEV) {
-  Object.assign(window, { __game: { world, track } });
+  Object.assign(window, { __game: { world, track, itemScene } });
 }
 
 let last = performance.now();
@@ -320,6 +357,7 @@ function frame(now: number): void {
 
   if (keyboard.wasPressed('KeyR') && world.race.phase === 'racing') resetCar();
   if (!results.root.hidden && keyboard.wasPressed('Enter')) restartRace();
+  if (world.race.phase === 'racing' && FIRE_KEYS.some((code) => keyboard.wasPressed(code))) world.useItem(0);
   keyboard.endFrame();
 
   accumulator += dt;
@@ -330,11 +368,18 @@ function frame(now: number): void {
 
   tickTimedBanner(dt);
   updateBanner();
-  for (const { racer, model } of carViews) model.sync(racer.car, dt);
+  itemScene.update(dt);
+  itemScene.handleEvents(world.items.drainEvents());
+  // carViews are in the same order as world.racers, so index i matches world.items.status[i].
+  carViews.forEach(({ racer, model }, i) => {
+    model.setBoosting(world.items.status[i].boost > 0);
+    model.sync(racer.car, dt);
+  });
   followCamera.update(world.player, dt);
   sun.position.set(world.player.x + 30, 60, world.player.z + 20);
   sun.target.position.set(world.player.x, 0, world.player.z);
   updateHud();
+  updateItemSlot();
   if (!results.root.hidden) updateStandings();
 
   renderer.render(scene, followCamera.camera);

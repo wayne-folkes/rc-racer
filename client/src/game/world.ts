@@ -1,6 +1,14 @@
-import { AiDriver, rubberBand, type AiSkill } from './aiDriver';
-import { createCar, DEFAULT_TUNING, stepCar, type CarInput, type CarState } from './carPhysics';
+import { AiDriver, rubberBand, type AiSkill, type Obstacle } from './aiDriver';
+import {
+  createCar,
+  DEFAULT_TUNING,
+  stepCar,
+  type CarInput,
+  type CarState,
+  type CarTuning,
+} from './carPhysics';
 import { collideCars, collideWithWalls } from './collision';
+import { DEMO_LAYOUT, ItemSystem, SPIN_TIME, type RacerStatus, type TrackLayout } from './items';
 import { Race, TOTAL_LAPS, type RaceEvent } from './race';
 import { buildRacingLine, type RacingLine } from './racingLine';
 import { gridPosition, OPPONENTS, PLAYER, type Opponent, type RacerInfo } from './racers';
@@ -10,6 +18,38 @@ import type { Projection, TrackPath } from './trackPath';
 // The game renders it; tests run it directly.
 
 export const NO_INPUT: CarInput = { throttle: 0, steer: 0, handbrake: false };
+
+/** Peak spin rate (rad/s) when hit; it winds down over the spin. */
+const SPIN_RATE = 11;
+/** Extra drag (1/s) while driving through a puddle. */
+const PUDDLE_DRAG = 1.6;
+const BOOST_SPEED = 1.35;
+const BOOST_ACCEL = 1.8;
+const SLICK_GRIP = 0.1;
+const SLICK_TURN = 0.6;
+/** AI fires missiles at cars this far ahead along the track (m)... */
+const AI_MISSILE_RANGE: [number, number] = [4, 35];
+/** ...and drops bombs on cars this far behind, if they're in its lane (within this many metres). */
+const AI_BOMB_RANGE: [number, number] = [2, 9];
+const AI_BOMB_LANE = 1.8;
+/** AI boosts when the line ahead is this fast (share of top speed) for this far (m). */
+const AI_BOOST_STRAIGHT = 0.9;
+const AI_BOOST_LOOKAHEAD = 30;
+
+/** Handling for a car right now, with boosts and oil taken into account. */
+export function effectiveTuning(base: CarTuning, status: RacerStatus): CarTuning {
+  let t = base;
+  if (status.boost > 0) t = { ...t, maxSpeed: t.maxSpeed * BOOST_SPEED, accel: t.accel * BOOST_ACCEL };
+  if (status.slick > 0) {
+    t = {
+      ...t,
+      grip: t.grip * SLICK_GRIP,
+      driftGrip: t.driftGrip * SLICK_GRIP,
+      maxTurnRate: t.maxTurnRate * SLICK_TURN,
+    };
+  }
+  return t;
+}
 
 export interface Racer {
   info: RacerInfo;
@@ -23,14 +63,23 @@ export interface WorldOptions {
   totalLaps?: number;
   /** Let an AI drive the player's car too (for tests). */
   autopilot?: AiSkill;
+  layout?: TrackLayout;
+  /** Seed for item boxes and oil, so races are repeatable. */
+  seed?: number;
 }
 
 export class RaceWorld {
   readonly line: RacingLine;
   readonly racers: Racer[];
   race: Race;
+  readonly items: ItemSystem;
   /** The player's projection onto the track after the last step. */
   playerProj: Projection;
+  /** Every car's projection after the last step. */
+  private projs: Projection[];
+  /** Item uses requested since the last step. */
+  private readonly useRequested: boolean[];
+  private hazardObstacles: Obstacle[] | null = null;
 
   constructor(
     readonly track: TrackPath,
@@ -48,7 +97,10 @@ export class RaceWorld {
       })),
     ];
     this.race = this.newRace();
-    this.playerProj = track.project(this.player.x, this.player.z);
+    this.items = new ItemSystem(track, this.racers.length, options.layout ?? DEMO_LAYOUT, options.seed);
+    this.useRequested = this.racers.map(() => false);
+    this.projs = this.racers.map((r) => track.project(r.car.x, r.car.z));
+    this.playerProj = this.projs[0];
   }
 
   get player(): CarState {
@@ -66,7 +118,15 @@ export class RaceWorld {
       r.driver?.reset();
     }
     this.race = this.newRace();
-    this.playerProj = this.track.project(this.player.x, this.player.z);
+    this.items.reset();
+    this.useRequested.fill(false);
+    this.projs = this.racers.map((r) => this.track.project(r.car.x, r.car.z));
+    this.playerProj = this.projs[0];
+  }
+
+  /** Asks to use a racer's held item on the next step (e.g. when the player presses fire). */
+  useItem(racer: number): void {
+    this.useRequested[racer] = true;
   }
 
   /** Puts a car back on the centreline nearest to it, facing the way the track runs. */
@@ -80,34 +140,95 @@ export class RaceWorld {
   }
 
   step(dt: number, playerInput: CarInput): RaceEvent[] {
-    const { race, track } = this;
+    const { race, track, items } = this;
     const cars = this.racers.map((r) => r.car);
     const playerProgress = race.progress(0);
+    const obstacles = this.obstacles();
 
     this.racers.forEach((racer, i) => {
+      const status = items.status[i];
       let input = NO_INPUT;
-      if (race.controlsLocked) {
-        // Nobody moves before GO.
+      if (race.controlsLocked || status.spin > 0) {
+        // Nobody moves before GO, and a spinning car is out of control.
       } else if (racer.driver) {
         const proj = track.project(racer.car.x, racer.car.z);
         const others = cars.filter((c) => c !== racer.car);
         // The player's own autopilot doesn't rubber-band against itself.
         const boost = i === 0 ? 1 : rubberBand(playerProgress - race.progress(i));
-        const decision = racer.driver.drive(racer.car, proj, others, boost, dt);
+        const decision = racer.driver.drive(racer.car, proj, others, boost, dt, obstacles);
         if (decision.respawn) this.resetCar(i);
         else input = decision.input;
+        if (this.aiWantsItem(i, proj)) this.useRequested[i] = true;
       } else if (race.phase !== 'finished') {
         input = playerInput;
       }
-      stepCar(racer.car, input, dt, racer.driver?.tuning ?? DEFAULT_TUNING);
+
+      const base = racer.driver?.tuning ?? DEFAULT_TUNING;
+      stepCar(racer.car, input, dt, effectiveTuning(base, status));
+      if (status.spin > 0) racer.car.heading += SPIN_RATE * (status.spin / SPIN_TIME) * dt;
+      if (status.inPuddle) {
+        const keep = Math.exp(-PUDDLE_DRAG * dt);
+        racer.car.vx *= keep;
+        racer.car.vz *= keep;
+      }
     });
 
     for (let i = 0; i < cars.length; i++) {
       for (let j = i + 1; j < cars.length; j++) collideCars(cars[i], cars[j]);
     }
 
-    const projs = cars.map((car) => collideWithWalls(car, track).proj);
-    this.playerProj = projs[0];
-    return race.update(dt, projs.map((p) => p.distance));
+    this.projs = cars.map((car) => collideWithWalls(car, track).proj);
+    this.playerProj = this.projs[0];
+
+    this.useRequested.forEach((wanted, i) => {
+      if (!wanted) return;
+      this.useRequested[i] = false;
+      const racing = race.phase === 'racing' || (race.phase === 'finished' && i !== 0);
+      if (racing && race.finishTimes[i] === null) items.use(i, cars[i], this.projs[i], this.projs);
+    });
+    items.update(dt, cars, this.projs);
+
+    return race.update(dt, this.projs.map((p) => p.distance));
+  }
+
+  /** Oil, puddles and bombs, for the AI to steer around. */
+  private obstacles(): Obstacle[] {
+    const obstacle = (x: number, z: number, radius: number) => {
+      const { distance, lateral } = this.track.project(x, z);
+      return { distance, lateral, radius };
+    };
+    // Hazards never move, so they're only projected onto the track once.
+    this.hazardObstacles ??= this.items.hazards.map((h) => obstacle(h.x, h.z, h.radius));
+    return [...this.hazardObstacles, ...this.items.bombs.map((b) => obstacle(b.x, b.z, 1.2))];
+  }
+
+  /** Simple tactics: fire at cars just ahead, bomb cars just behind, boost on straights. */
+  private aiWantsItem(i: number, proj: Projection): boolean {
+    const { item, holdTime } = this.items.status[i];
+    // Each car waits a slightly different moment before using what it picked up.
+    if (!item || holdTime < 1.2 + ((i * 0.37) % 1.2)) return false;
+
+    const me = this.race.progress(i);
+    const others = this.racers.map((_, j) => j).filter((j) => j !== i);
+    const gap = (j: number) => this.race.progress(j) - me;
+    if (item === 'missile') return others.some((j) => gap(j) > AI_MISSILE_RANGE[0] && gap(j) < AI_MISSILE_RANGE[1]);
+    if (item === 'bomb') {
+      // The leader doesn't bomb its chasers: that would make it all but impossible to catch.
+      if (this.race.position(i) === 1) return false;
+      return others.some(
+        (j) =>
+          -gap(j) > AI_BOMB_RANGE[0] &&
+          -gap(j) < AI_BOMB_RANGE[1] &&
+          Math.abs(this.projs[j].lateral - proj.lateral) < AI_BOMB_LANE,
+      );
+    }
+
+    const { targetSpeed, spacing } = this.line;
+    const steps = Math.round(AI_BOOST_LOOKAHEAD / spacing);
+    for (let k = 0; k < steps; k++) {
+      const speed = targetSpeed[(proj.index + k) % targetSpeed.length];
+      if (speed < DEFAULT_TUNING.maxSpeed * AI_BOOST_STRAIGHT) return false;
+    }
+    return true;
   }
 }

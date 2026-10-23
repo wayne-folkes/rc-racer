@@ -53,15 +53,20 @@ describe('demo track race', () => {
       }
     }
     expect(world.race.finishTimes.every((f) => f !== null)).toBe(true);
-    // AI cars pass or follow instead of shoving each other round the track.
-    expect(contactSeconds).toBeLessThan(1);
+    // AI cars pass or follow instead of shoving each other round the track. (Cars spun out by a
+    // missile or bomb do get bumped, so this isn't zero.)
+    expect(contactSeconds).toBeLessThan(2);
     // Rubber-banding keeps it close: the whole field finishes within 15 s of the winner.
     const times = world.race.finishTimes as number[];
     expect(Math.max(...times) - Math.min(...times)).toBeLessThan(15);
   });
 
   it('a quick driver can climb from the back of the grid into the top two', () => {
-    const world = new RaceWorld(track, { autopilot: { pace: 1, steerGain: 2.6 } });
+    // Without items, so this measures whether the AI can be passed rather than who got hit.
+    const world = new RaceWorld(track, {
+      autopilot: { pace: 1, steerGain: 2.6 },
+      layout: { hazards: [], pickups: [] },
+    });
     runRace(world, 180);
     expect(world.race.position(0)).toBeLessThanOrEqual(2);
   });
