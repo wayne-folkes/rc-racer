@@ -33,3 +33,21 @@ export class BackCard implements MenuCard {
     return this.back;
   }
 }
+
+/** A button that flips between "Label: Off" and "Label: On". */
+export class Toggle {
+  on = false;
+
+  constructor(
+    private readonly button: HTMLButtonElement,
+    private readonly label: string,
+  ) {
+    button.addEventListener('click', () => this.set(!this.on));
+  }
+
+  set(on: boolean): void {
+    this.on = on;
+    this.button.textContent = `${this.label}: ${on ? 'On' : 'Off'}`;
+    this.button.setAttribute('aria-pressed', String(on));
+  }
+}

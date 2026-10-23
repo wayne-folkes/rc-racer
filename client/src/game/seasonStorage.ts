@@ -1,4 +1,5 @@
 import { newSeasonState, UPGRADE_KINDS, type SeasonState } from './season';
+import { isCircuitId } from './tracks';
 import { isVehicleId } from './vehicles';
 
 // Keeps the season in localStorage so a refresh doesn't lose progress. Storage can throw
@@ -18,10 +19,11 @@ export function loadSeason(): SeasonState | null {
       Number.isInteger(s.continuesLeft) &&
       Array.isArray(s.results) &&
       STATUSES.has(s.status as string) &&
-      // Seasons saved before vehicles, easy mode or reverse existed lack these, and take the defaults.
+      // Seasons saved before vehicles, easy mode, reverse or circuits existed lack these, and take the defaults.
       (s.vehicle === undefined || isVehicleId(s.vehicle)) &&
       (s.easy === undefined || typeof s.easy === 'boolean') &&
       (s.reverse === undefined || typeof s.reverse === 'boolean') &&
+      (s.circuit === undefined || isCircuitId(s.circuit)) &&
       UPGRADE_KINDS.every((k) => Number.isInteger(s.levels?.[k]));
     return valid ? { ...newSeasonState(), ...s } : null;
   } catch {
