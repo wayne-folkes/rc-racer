@@ -50,7 +50,6 @@ const MISSILE_PICKUP_TILT = 0.35;
 const BOOST_PAD_Y = 0.028;
 const BOOST_PAD_LENGTH = 3.6;
 const BOOST_PAD_WIDTH = 2.6;
-const BOOST_PAD_BORDER = 0.22;
 const BOOST_ARROW_COUNT = 3;
 const BOOST_ARROW_SPACING = 1.1;
 /** Seconds for one chase along the arrows, and how far each arrow lags the one behind it (share of a chase). */
@@ -128,26 +127,6 @@ function blobGeometry(seed: number): BufferGeometry {
 /** A flat rectangle lying on the ground, facing up, centred on the origin. */
 function flatRect(w: number, h: number): PlaneGeometry {
   const geom = new PlaneGeometry(w, h);
-  geom.rotateX(-Math.PI / 2);
-  return geom;
-}
-
-/** A rectangle in the XY plane, centred on the origin. */
-function rectShape(w: number, h: number): Shape {
-  const shape = new Shape();
-  shape.moveTo(-w / 2, -h / 2);
-  shape.lineTo(w / 2, -h / 2);
-  shape.lineTo(w / 2, h / 2);
-  shape.lineTo(-w / 2, h / 2);
-  shape.closePath();
-  return shape;
-}
-
-/** The yellow frame round a boost pad: a rectangle with a smaller one cut out. Lies flat, facing up. */
-function boostBorderGeometry(): ShapeGeometry {
-  const shape = rectShape(BOOST_PAD_LENGTH, BOOST_PAD_WIDTH);
-  shape.holes.push(rectShape(BOOST_PAD_LENGTH - 2 * BOOST_PAD_BORDER, BOOST_PAD_WIDTH - 2 * BOOST_PAD_BORDER));
-  const geom = new ShapeGeometry(shape);
   geom.rotateX(-Math.PI / 2);
   return geom;
 }
@@ -236,15 +215,6 @@ function createAssets() {
     sparkOn: new MeshBasicMaterial({ color: '#ff3b3b' }),
     sparkOff: new MeshBasicMaterial({ color: '#5a1212' }),
 
-    padBase: flatRect(BOOST_PAD_LENGTH, BOOST_PAD_WIDTH),
-    padBorder: boostBorderGeometry(),
-    padBaseMat: new MeshStandardMaterial({ color: '#1b1b22', roughness: 0.6 }),
-    padBorderMat: new MeshStandardMaterial({
-      color: '#facc15',
-      emissive: '#f59e0b',
-      emissiveIntensity: 0.6,
-      roughness: 0.4,
-    }),
     chevron: chevronGeometry(),
     // One material per arrow, shared by every pad, so the chase runs along all of them together.
     chevronMats: Array.from(
@@ -511,16 +481,13 @@ export class ItemScene {
     this.prune(this.bombs, live);
   }
 
-  /** A flat base, a yellow border and three arrows, turned to the pad's heading. */
+  /** Three arrows on the road, turned to the pad's heading. */
   private boostPadMesh(pad: BoostPad): Group {
-    const { padBase, padBorder, padBaseMat, padBorderMat, chevron, chevronMats } = this.assets;
+    const { chevron, chevronMats } = this.assets;
     const group = new Group();
     group.position.set(pad.x, BOOST_PAD_Y, pad.z);
     // Built along +X, then turned to the heading. Three's Y rotation runs the opposite way (see carModel.ts).
     group.rotation.y = -pad.heading;
-    const border = new Mesh(padBorder, padBorderMat);
-    border.position.y = 0.003;
-    group.add(new Mesh(padBase, padBaseMat), border);
     // Arrow 0 is at the back of the pad, so the chase runs back to front.
     chevronMats.forEach((mat, i) => {
       const arrow = new Mesh(chevron, mat);
