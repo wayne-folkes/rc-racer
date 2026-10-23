@@ -44,8 +44,8 @@ describe('easy mode pace', () => {
   it('holds a runaway leader back further, and changes nothing else', () => {
     expect(rubberBand(-100)).toBe(0.92);
     expect(rubberBand(-100, true)).toBeLessThan(rubberBand(-100));
-    // Close to the player, or behind, a car is treated the same either way.
-    for (const gap of [-5, 0, 20, 100]) expect(rubberBand(gap, true)).toBe(rubberBand(gap));
+    // Level with the player, or just ahead, a car is treated the same either way.
+    for (const gap of [-5, 0]) expect(rubberBand(gap, true)).toBe(rubberBand(gap));
   });
 
   it('makes the opponents slower every round', () => {

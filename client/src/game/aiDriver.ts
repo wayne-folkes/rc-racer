@@ -28,17 +28,25 @@ const SPEED_ERROR_FOR_FULL = 2;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+/** The fastest a car well behind the player is pushed: a lead of a few seconds doesn't last. */
+const CATCH_UP = 1.12;
+/** In easy mode a car behind only gets this small push. */
+const EASY_CATCH_UP = 1.03;
+/** Extra pace per metre a car trails the player by: the further back, the harder it pushes. */
+const CATCH_UP_PER_METRE = 0.006;
+
 /** The slowest a car ahead of the player is held to in easy mode (normally 0.92). */
 const EASY_SLOWEST = 0.88;
 
 /**
  * Pace multiplier that keeps races close without trapping the player in a pack: cars well ahead
- * of the player ease off a little, cars behind push a little. `gap` is the player's progress
+ * of the player ease off a little, cars behind push to close the gap. `gap` is the player's progress
  * minus the AI car's, in metres. In easy mode a car that's well ahead eases off further, so a runaway
  * leader can be caught.
  */
 export function rubberBand(gap: number, easy = false): number {
-  return clamp(1 + gap * 0.003, easy ? EASY_SLOWEST : 0.92, 1.03);
+  const perMetre = gap > 0 && !easy ? CATCH_UP_PER_METRE : 0.003;
+  return clamp(1 + gap * perMetre, easy ? EASY_SLOWEST : 0.92, easy ? EASY_CATCH_UP : CATCH_UP);
 }
 
 export interface AiDecision {

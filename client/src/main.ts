@@ -12,7 +12,7 @@ import {
 import { inject } from '@vercel/analytics';
 import './style.css';
 import { distanceVolume, engineNote, Sound, type SoundName } from './game/audio';
-import { DEFAULT_TUNING, speed } from './game/carPhysics';
+import { DEFAULT_TUNING, speed, type CarState } from './game/carPhysics';
 import { CarModel } from './game/carModel';
 import { Controls } from './game/controls';
 import { FollowCamera } from './game/followCamera';
@@ -31,6 +31,7 @@ import { buildTrackScene, disposeScene } from './game/trackScene';
 import { buildGridLabel } from './game/gridLabel';
 import { TouchControls } from './game/touch';
 import type { VehicleId } from './game/vehicles';
+import { blendCar, poseOf, type Pose } from './game/renderPose';
 import { createMeteors, type MeteorScene } from './game/meteorScene';
 import { createWeather, type WeatherScene } from './game/weatherScene';
 import { NO_INPUT, RaceWorld, type Racer } from './game/world';
@@ -270,6 +271,8 @@ function clearRace(): void {
     meteors = null;
   }
   carViews = [];
+  prevPoses = [];
+  drawnCars = [];
   gridLabel = null;
   trackScene = null;
 }
@@ -1011,6 +1014,20 @@ if (import.meta.env.DEV) {
 let last = performance.now();
 let accumulator = 0;
 
+let prevPoses: Pose[] = [];
+/** The cars as drawn this frame: the latest step, blended with the one before by how far into the next step we are. */
+let drawnCars: CarState[] = [];
+let renderAlpha = 1;
+
+function snapshotPoses(): void {
+  prevPoses = world.racers.map(({ car }) => poseOf(car));
+}
+
+function drawnCar(i: number): CarState {
+  const car = world.racers[i].car;
+  return blendCar((drawnCars[i] ??= { ...car }), car, prevPoses[i], renderAlpha);
+}
+
 function frame(now: number): void {
   const dt = Math.min(MAX_FRAME, (now - last) / 1000);
   last = now;
@@ -1042,10 +1059,13 @@ function frame(now: number): void {
   } else {
     accumulator += dt;
     while (accumulator >= STEP) {
+      snapshotPoses();
       fixedUpdate(STEP);
       accumulator -= STEP;
     }
   }
+  // Paused or idle, nothing is moving, so the latest step is what's drawn.
+  renderAlpha = paused || !live ? 1 : accumulator / STEP;
   // The demo moves on a few seconds after its leader crosses the line.
   if (demo && world.race.phase === 'finished') {
     demoTimer -= dt;
@@ -1071,11 +1091,11 @@ function frame(now: number): void {
   // The grid label stays up until the lights go out, in a race you're driving.
   if (gridLabel) gridLabel.visible = live && !demo && world.race.phase === 'countdown';
   // carViews are in the same order as world.racers, so index i matches world.items.status[i].
-  carViews.forEach(({ racer, model }, i) => {
+  carViews.forEach(({ model }, i) => {
     model.setBoosting(world.items.status[i].boost > 0);
-    model.sync(racer.car, simDt);
+    model.sync(drawnCar(i), simDt);
   });
-  followCamera.update(world.player, simDt);
+  followCamera.update(drawnCar(0), simDt);
   sun.position.set(world.player.x + 30, 60, world.player.z + 20);
   sun.target.position.set(world.player.x, 0, world.player.z);
   updateHud();

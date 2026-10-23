@@ -36,7 +36,7 @@ const CRATER_MAX = 3.4;
 /** Craters keep this far clear of the road: the curb and wall, and the crater's rim. */
 const ROAD_MARGIN = 0.9 + 0.6 + 1.5;
 const RIM = 1.25;
-const CRATER_Y = 0.014;
+const CRATER_Y = 0.02;
 /** Craters from earlier impacts stay, up to this many; then the oldest goes. */
 const MAX_CRATERS = 12;
 const CRATER_GROW = 0.25;
@@ -114,8 +114,12 @@ export function createMeteors(track: TrackPath, ground: string, seed: number): M
   const rand = seededRandom(seed);
   const root = new Group();
   const base = new Color(ground);
-  const floorMat = new MeshStandardMaterial({ color: base.clone().multiplyScalar(0.55), roughness: 1 });
-  const rimMat = new MeshStandardMaterial({ color: base.clone().lerp(new Color('#ffffff'), 0.3), roughness: 1 });
+  // Pulled towards the camera more than the scenery's flat craters, so a new crater that lands on one
+  // is drawn cleanly over it instead of flickering against it.
+  const flatMat = (color: Color) =>
+    new MeshStandardMaterial({ color, roughness: 1, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  const floorMat = flatMat(base.clone().multiplyScalar(0.55));
+  const rimMat = flatMat(base.clone().lerp(new Color('#ffffff'), 0.3));
   const glow = glowTexture();
 
   const floorGeom = new CircleGeometry(1, 16);

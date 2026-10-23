@@ -278,17 +278,25 @@ function sceneryBox(track: TrackPath): Box {
 
 /**
  * Scatters up to `count` objects in the scenery box, skipping spots on or near the road. Wide objects
- * pass how far they reach from their centre, so their edges keep clear of the road too.
+ * pass how far they reach from their centre, so their edges keep clear of the road too. An object that
+ * sets `userData.footprint` (its radius on the ground) is also kept clear of the others that do: flat
+ * objects that overlapped would flicker where they share a surface.
  */
 function scatter(track: TrackPath, rand: () => number, count: number, make: () => Object3D, reach = 0): Group {
   const group = new Group();
   const box = sceneryBox(track);
+  const flat: { x: number; z: number; r: number }[] = [];
   for (let attempt = 0; attempt < 2000 && group.children.length < count; attempt++) {
     const x = box.minX + rand() * (box.maxX - box.minX);
     const z = box.minZ + rand() * (box.maxZ - box.minZ);
     if (Math.abs(track.project(x, z).lateral) < track.halfWidth + SCENERY_CLEARANCE + reach) continue;
 
     const object = make();
+    const footprint: number = object.userData.footprint ?? 0;
+    if (footprint > 0) {
+      if (flat.some((other) => Math.hypot(other.x - x, other.z - z) < other.r + footprint + 0.5)) continue;
+      flat.push({ x, z, r: footprint });
+    }
     object.position.set(x, 0, z);
     object.rotation.y = rand() * Math.PI * 2;
     group.add(object);
@@ -400,8 +408,11 @@ function craters(track: TrackPath, rand: () => number): Group {
   floorGeom.rotateX(-Math.PI / 2);
   const rimGeom = new RingGeometry(1, 1.25, 16);
   rimGeom.rotateX(-Math.PI / 2);
-  const floorMat = new MeshStandardMaterial({ color: '#5d5d64', roughness: 1 });
-  const rimMat = new MeshStandardMaterial({ color: '#b6b6bc', roughness: 1 });
+  // Pulled slightly towards the camera, so the flat craters never flicker against the ground.
+  const flatMat = (color: string) =>
+    new MeshStandardMaterial({ color, roughness: 1, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  const floorMat = flatMat('#5d5d64');
+  const rimMat = flatMat('#b6b6bc');
   const boulderGeom = new DodecahedronGeometry(0.6, 0);
   const boulderMat = new MeshStandardMaterial({ color: '#9b9ba1', flatShading: true, roughness: 0.95 });
   const poleGeom = new CylinderGeometry(0.04, 0.04, 2.2, 5);
@@ -418,6 +429,7 @@ function craters(track: TrackPath, rand: () => number): Group {
     group.add(floor, rim);
     const r = 1.4 + rand() * 2.2;
     group.scale.set(r, 1, r);
+    group.userData.footprint = r * 1.25;
     return group;
   };
   const boulder = () => {
