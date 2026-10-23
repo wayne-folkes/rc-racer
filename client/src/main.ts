@@ -29,6 +29,8 @@ const ORDINAL_SUFFIXES = ['th', 'st', 'nd', 'rd'];
 const WRONG_WAY_DOT = -3;
 /** Seconds of wrong-way driving before the WRONG WAY banner shows. */
 const WRONG_WAY_DELAY = 0.6;
+/** Starts the race over from the grid at any point. */
+const RESTART_KEY = 'KeyN';
 /** Keys that use the held item. */
 const FIRE_KEYS = ['KeyX', 'ShiftLeft', 'ShiftRight'];
 const ITEM_LABELS: Record<ItemKind, { icon: string; name: string }> = {
@@ -356,7 +358,8 @@ function frame(now: number): void {
   last = now;
 
   if (keyboard.wasPressed('KeyR') && world.race.phase === 'racing') resetCar();
-  if (!results.root.hidden && keyboard.wasPressed('Enter')) restartRace();
+  // N restarts at any point; Enter also does on the results card, next to its button.
+  if (keyboard.wasPressed(RESTART_KEY) || (!results.root.hidden && keyboard.wasPressed('Enter'))) restartRace();
   if (world.race.phase === 'racing' && FIRE_KEYS.some((code) => keyboard.wasPressed(code))) world.useItem(0);
   keyboard.endFrame();
 

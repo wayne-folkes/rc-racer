@@ -12,7 +12,7 @@ npm run dev
 ```
 
 Arrow keys or WASD to drive, Space for the handbrake (slide), X or Shift to use an item, R to reset
-onto the track.
+onto the track, N to restart the race (or Enter on the results screen).
 
 `npm test` runs the unit tests (handling, track maths, collisions, race rules, AI, and full
 four-car races on the demo track). `npm run build` type-checks and builds to `client/dist`.
@@ -37,8 +37,3 @@ four-car races on the demo track). `npm run build` type-checks and builds to `cl
 4. Pickups and weapons (missiles, bombs, boosts), oil slicks and puddles. **(done)**
 5. Progression: several tracks, upgrades between races, top-3-or-game-over.
 6. Polish: sound, menus, gamepad, ramps and jumps, track editor.
-
-## Backlog
-
-- Restart key that works at any point in a race, not just on the results screen (Enter only
-  restarts from the results card today).
