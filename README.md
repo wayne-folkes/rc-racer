@@ -26,7 +26,7 @@ four-car races on the demo track). `npm run build` type-checks and builds to `cl
 - `client/src/game/race.ts`: race rules: countdown, checkpoints, laps, standings.
 - `client/src/game/world.ts`: the whole race simulation (cars, AI, collisions, rules) without rendering.
 - `client/src/game/racingLine.ts`, `aiDriver.ts`, `racers.ts`: AI racing line, driving, opponents and grid.
-- `client/src/game/items.ts`: item boxes, missiles, bombs, boosts, oil and puddles, and the demo layout.
+- `client/src/game/items.ts`: pickups, missiles, bombs, boost pads, oil and puddles, and the demo layout.
 - `client/src/game/carModel.ts`, `trackScene.ts`, `itemScene.ts`, `followCamera.ts`: visuals.
 
 ## Roadmap
@@ -34,6 +34,6 @@ four-car races on the demo track). `npm run build` type-checks and builds to `cl
 1. One car on a track, tuned until it's fun to drive. **(done)**
 2. Proper race: countdown, checkpoints, 3-lap races, results. **(done)**
 3. AI opponents following the racing line, race positions. **(done)**
-4. Pickups and weapons (missiles, bombs, boosts), oil slicks and puddles. **(done)**
+4. Pickups and weapons (missiles, bombs), boost pads, oil slicks and puddles. **(done)**
 5. Progression: several tracks, upgrades between races, top-3-or-game-over.
 6. Polish: sound, menus, gamepad, ramps and jumps, track editor.

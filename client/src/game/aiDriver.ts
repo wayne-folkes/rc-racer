@@ -52,6 +52,10 @@ export interface Obstacle {
   radius: number;
 }
 
+/** Detour onto boost pads up to this far ahead... */
+const BOOST_PAD_LOOKAHEAD = 22;
+/** ...when they're no more than this far from where the car was going to drive. */
+const BOOST_PAD_MAX_DETOUR = 3;
 /** Start steering around obstacles this far ahead. */
 const OBSTACLE_LOOKAHEAD = 24;
 /** Pass obstacles with this much space between their edge and the car's centre. */
@@ -87,6 +91,7 @@ export class AiDriver {
    * @param others Every other car, to get around.
    * @param paceBoost Extra pace multiplier, from rubberBand().
    * @param obstacles Hazards to steer around.
+   * @param boostPads Pads worth a small detour (their radius is unused).
    */
   drive(
     car: CarState,
@@ -95,6 +100,7 @@ export class AiDriver {
     paceBoost: number,
     dt: number,
     obstacles: Obstacle[] = [],
+    boostPads: Obstacle[] = [],
   ): AiDecision {
     const pace = this.skill.pace * paceBoost;
     this.tuning.maxSpeed = DEFAULT_TUNING.maxSpeed * pace;
@@ -106,7 +112,9 @@ export class AiDriver {
     const room = this.track.halfWidth - 1.2;
 
     const traffic = this.traffic(car, proj, others, lineOffset, room, dt);
-    const wantedOffset = this.avoidObstacles(proj, obstacles, traffic.offset, room);
+    // Overtaking comes first; otherwise take a boost pad if it's close to the line.
+    const towardsPad = this.passSide === 0 ? this.seekBoostPad(proj, boostPads, traffic.offset) : traffic.offset;
+    const wantedOffset = this.avoidObstacles(proj, obstacles, towardsPad, room);
     const wantedShift = wantedOffset - lineOffset;
     this.shift += clamp(wantedShift - this.shift, -LINE_CHANGE_RATE * dt, LINE_CHANGE_RATE * dt);
 
@@ -190,6 +198,20 @@ export class AiDriver {
     // Right behind a car with no way round: match its speed rather than ram it.
     const boxedIn = blocker !== null && blocker.ahead < FOLLOW_DISTANCE && Math.abs(blocker.side) < 1.8;
     return { offset, speedCap: boxedIn ? Math.max(0, blocker!.speed - 0.5) : Infinity };
+  }
+
+  /** Aims at the nearest boost pad just up the track, if it's only a small detour. */
+  private seekBoostPad(proj: Projection, pads: Obstacle[], offset: number): number {
+    const length = this.track.length;
+    let best: Obstacle | null = null;
+    let bestAhead = BOOST_PAD_LOOKAHEAD;
+    for (const pad of pads) {
+      const ahead = ((pad.distance - proj.distance + 1 + length) % length) - 1;
+      if (ahead < 0 || ahead > bestAhead || Math.abs(pad.lateral - offset) > BOOST_PAD_MAX_DETOUR) continue;
+      best = pad;
+      bestAhead = ahead;
+    }
+    return best ? best.lateral : offset;
   }
 
   /** Moves the aim off any obstacle just up the track that sits where the car is heading. */

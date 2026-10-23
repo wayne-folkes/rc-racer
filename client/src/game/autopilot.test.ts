@@ -65,7 +65,7 @@ describe('demo track race', () => {
     // Without items, so this measures whether the AI can be passed rather than who got hit.
     const world = new RaceWorld(track, {
       autopilot: { pace: 1, steerGain: 2.6 },
-      layout: { hazards: [], pickups: [] },
+      layout: { hazards: [], pickups: [], boostPads: [] },
     });
     runRace(world, 180);
     expect(world.race.position(0)).toBeLessThanOrEqual(2);

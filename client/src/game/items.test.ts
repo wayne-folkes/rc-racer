@@ -6,7 +6,7 @@ import { effectiveTuning, NO_INPUT, RaceWorld } from './world';
 
 const track = new TrackPath(DEMO_TRACK, 5.5);
 const DT = 1 / 120;
-const EMPTY: TrackLayout = { hazards: [], pickups: [] };
+const EMPTY: TrackLayout = { hazards: [], pickups: [], boostPads: [] };
 
 /** A car on the centreline at a fraction of the lap, facing along the track. */
 function carAt(at: number, lateral = 0, speedAlong = 0): CarState {
@@ -31,21 +31,21 @@ function run(items: ItemSystem, cars: CarState[], seconds: number, drive?: () =>
 }
 
 describe('pickups', () => {
-  const row: TrackLayout = { hazards: [], pickups: pickupRow(0.2, ['missile', 'boost', 'bomb']) };
+  const row: TrackLayout = { hazards: [], pickups: pickupRow(0.2, ['missile', 'bomb', 'missile']), boostPads: [] };
 
   it('give the item they show to a car that drives through, then come back', () => {
     const items = new ItemSystem(track, 1, row);
-    const boost = items.pickups[1];
-    expect(boost.kind).toBe('boost');
-    const car = createCar(boost.x, boost.z, 0);
+    const bomb = items.pickups[1];
+    expect(bomb.kind).toBe('bomb');
+    const car = createCar(bomb.x, bomb.z, 0);
     const events = run(items, [car], DT);
-    expect(items.status[0].item).toBe('boost');
-    expect(events[0]).toMatchObject({ type: 'pickup', racer: 0, item: 'boost' });
-    expect(boost.respawn).toBeGreaterThan(0);
+    expect(items.status[0].item).toBe('bomb');
+    expect(events[0]).toMatchObject({ type: 'pickup', racer: 0, item: 'bomb' });
+    expect(bomb.respawn).toBeGreaterThan(0);
 
     car.x += 50; // drive away
     run(items, [car], 5);
-    expect(boost.respawn).toBe(0);
+    expect(bomb.respawn).toBe(0);
   });
 
   it('always give the same item from the same spot', () => {
@@ -126,7 +126,7 @@ describe('bombs', () => {
 
 describe('boost', () => {
   it('raises top speed and acceleration while it lasts', () => {
-    const status = { item: null, holdTime: 0, spin: 0, boost: 1, slick: 0, inPuddle: false, onOil: false };
+    const status = { item: null, holdTime: 0, spin: 0, boost: 1, slick: 0, inPuddle: false, onOil: false, onPad: false };
     const boosted = effectiveTuning(DEFAULT_TUNING, status);
     expect(boosted.maxSpeed).toBeGreaterThan(DEFAULT_TUNING.maxSpeed);
     expect(boosted.accel).toBeGreaterThan(DEFAULT_TUNING.accel);
@@ -141,20 +141,46 @@ describe('boost', () => {
     expect(speed(fast)).toBeGreaterThan(speed(plain) * 1.2);
   });
 
-  it('starts when a car uses a boost item', () => {
-    const items = new ItemSystem(track, 1, EMPTY);
-    const car = carAt(0.1);
-    items.status[0].item = 'boost';
-    expect(items.use(0, car, track.project(car.x, car.z), projOf([car]))).toBe(true);
-    expect(items.status[0].boost).toBe(BOOST_TIME);
-    expect(items.status[0].item).toBeNull();
-    expect(items.use(0, car, track.project(car.x, car.z), projOf([car]))).toBe(false);
+  const padAt: TrackLayout = { hazards: [], pickups: [], boostPads: [{ at: 0.1, lateral: 0 }] };
+
+  it('starts when a car drives over a boost pad, once per pass', () => {
+    const items = new ItemSystem(track, 1, padAt);
+    const car = carAt(0.1 - 6 / track.length, 0, 10);
+    const pad = items.boostPads[0];
+    const events = run(items, [car], 1.2, () => {
+      car.x += car.vx * DT;
+      car.z += car.vz * DT;
+    });
+    expect(events.filter((e) => e.type === 'boost')).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: 'boost', racer: 0 });
+    expect(items.status[0].boost).toBeGreaterThan(0);
+    expect(items.status[0].boost).toBeLessThan(BOOST_TIME);
+    expect(Math.hypot(car.x - pad.x, car.z - pad.z)).toBeGreaterThan(2); // drove on past it
+  });
+
+  it("doesn't boost a car that's spinning over a pad", () => {
+    const items = new ItemSystem(track, 1, padAt);
+    items.status[0].spin = SPIN_TIME;
+    const pad = items.boostPads[0];
+    run(items, [createCar(pad.x, pad.z, 0)], DT);
+    expect(items.status[0].boost).toBe(0);
+  });
+
+  it('AI cars take boost pads near their line', () => {
+    const world = new RaceWorld(track, { autopilot: { pace: 0.95, steerGain: 2.4 } });
+    let boosts = 0;
+    for (let t = 0; t < 200 && world.race.finishTimes.some((f) => f === null); t += DT) {
+      world.step(DT, NO_INPUT);
+      boosts += world.items.drainEvents().filter((e) => e.type === 'boost').length;
+    }
+    // Four cars, three laps, three pads: they shouldn't all be ignored.
+    expect(boosts).toBeGreaterThan(6);
   });
 });
 
 describe('hazards', () => {
-  const oilAt: TrackLayout = { hazards: [{ kind: 'oil', at: 0.3, lateral: 0, radius: 1.6 }], pickups: [] };
-  const puddleAt: TrackLayout = { hazards: [{ kind: 'puddle', at: 0.3, lateral: 0, radius: 2.2 }], pickups: [] };
+  const oilAt: TrackLayout = { hazards: [{ kind: 'oil', at: 0.3, lateral: 0, radius: 1.6 }], pickups: [], boostPads: [] };
+  const puddleAt: TrackLayout = { hazards: [{ kind: 'puddle', at: 0.3, lateral: 0, radius: 2.2 }], pickups: [], boostPads: [] };
 
   it('oil makes a moving car slide and jolts its heading', () => {
     const items = new ItemSystem(track, 1, oilAt);
@@ -209,10 +235,10 @@ describe('items in a race', () => {
 
   it('the player can only use items once the race is on', () => {
     const world = new RaceWorld(track, { opponents: [], layout: EMPTY });
-    world.items.status[0].item = 'boost';
+    world.items.status[0].item = 'bomb';
     world.useItem(0);
     world.step(DT, NO_INPUT);
-    expect(world.items.status[0].item).toBe('boost');
+    expect(world.items.status[0].item).toBe('bomb');
   });
 
   it('AI cars pick up and use items, and the race still finishes', () => {
@@ -223,12 +249,12 @@ describe('items in a race', () => {
       world.step(DT, NO_INPUT);
       for (const e of world.items.drainEvents()) {
         if (e.type === 'pickup') pickups++;
-        if (e.type === 'fire' || e.type === 'drop' || e.type === 'boost') used.add(e.type);
+        if (e.type === 'fire' || e.type === 'drop') used.add(e.type);
       }
     }
     expect(world.race.finishTimes.every((f) => f !== null)).toBe(true);
     expect(pickups).toBeGreaterThan(4);
-    expect(used.size).toBeGreaterThanOrEqual(2);
+    expect(used.size).toBe(2);
   });
 
   it('plays out the same way every time with the same seed', () => {

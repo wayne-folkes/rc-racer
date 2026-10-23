@@ -36,7 +36,6 @@ const FIRE_KEYS = ['KeyX', 'ShiftLeft', 'ShiftRight'];
 const ITEM_LABELS: Record<ItemKind, { icon: string; name: string }> = {
   missile: { icon: '🚀', name: 'Missile' },
   bomb: { icon: '💣', name: 'Bomb' },
-  boost: { icon: '⚡', name: 'Boost' },
 };
 
 type BannerTone = 'white' | 'green' | 'accent' | 'red';

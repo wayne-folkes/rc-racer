@@ -5,7 +5,6 @@ import {
   ConeGeometry,
   CylinderGeometry,
   DoubleSide,
-  ExtrudeGeometry,
   Float32BufferAttribute,
   Group,
   Material,
@@ -13,32 +12,52 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   OctahedronGeometry,
+  PlaneGeometry,
   RingGeometry,
   Shape,
+  ShapeGeometry,
   SphereGeometry,
 } from 'three';
 import { FACE_CAMERA_YAW } from './followCamera';
-import { ITEM_KINDS, seededRandom, type Hazard, type ItemEvent, type ItemKind, type ItemSystem, type Pickup } from './items';
+import {
+  ITEM_KINDS,
+  seededRandom,
+  type BoostPad,
+  type Hazard,
+  type ItemEvent,
+  type ItemKind,
+  type ItemSystem,
+  type Pickup,
+} from './items';
 
-// Draws what the item system simulates: hazards, item pickups, missiles, bombs and short effects.
+// Draws what the item system simulates: hazards, boost pads, item pickups, missiles, bombs and short effects.
 // Missiles and bombs are matched to the sim by id, so meshes come and go with the sim's arrays.
 
 const HAZARD_Y = 0.025;
 /** Height of the bob line that pickups float around. */
 const BOX_Y = 0.9;
-/** Height of the lowest point of a pickup's model, so bombs and bolts hover just above the road. */
+/** Height of the lowest point of a pickup's model, so bombs hover just above the road. */
 const PICKUP_FLOOR = 0.35;
 /** Pickups are drawn at 1.6x the size of the fired missile and bomb. */
 const PICKUP_SCALE = 1.6;
-/** The missile and bolt are slim, so their pickups are drawn bigger still to read at a glance. */
+/** The missile is slim, so its pickup is drawn bigger still to read at a glance. */
 const MISSILE_PICKUP_SCALE = 2.3;
-const BOLT_PICKUP_SCALE = 1.25;
 /** How far pickups sway either side of facing the camera (radians). */
 const PICKUP_SWAY = 0.35;
 /** Nose-up tilt for the missile pickup, so it reads from the high camera. */
 const MISSILE_PICKUP_TILT = 0.35;
-/** Half the height of the boost bolt. */
-const BOLT_HALF_HEIGHT = 0.9;
+/** Boost pads: a flat strip on the road, built along +X and turned to the pad's heading. */
+const BOOST_PAD_Y = 0.028;
+const BOOST_PAD_LENGTH = 3.6;
+const BOOST_PAD_WIDTH = 2.6;
+const BOOST_PAD_BORDER = 0.22;
+const BOOST_ARROW_COUNT = 3;
+const BOOST_ARROW_SPACING = 1.1;
+/** Seconds for one chase along the arrows, and how far each arrow lags the one behind it (share of a chase). */
+const CHASE_PERIOD = 1;
+const CHASE_LAG = 0.15;
+/** Seconds the streak lasts when a car boosts over a pad. */
+const BOOST_FLASH_LIFE = 0.3;
 /** Ground rings sit just above the road and just inside the sim's pickup radius (1.7). */
 const PICKUP_RING_Y = 0.03;
 const PICKUP_RING_INNER = 1.25;
@@ -106,26 +125,45 @@ function blobGeometry(seed: number): BufferGeometry {
   return geom;
 }
 
-/** A chunky zigzag bolt in the XY plane, centred on the origin, with a slight bevel. */
-function boltGeometry(): BufferGeometry {
+/** A flat rectangle lying on the ground, facing up, centred on the origin. */
+function flatRect(w: number, h: number): PlaneGeometry {
+  const geom = new PlaneGeometry(w, h);
+  geom.rotateX(-Math.PI / 2);
+  return geom;
+}
+
+/** A rectangle in the XY plane, centred on the origin. */
+function rectShape(w: number, h: number): Shape {
   const shape = new Shape();
-  shape.moveTo(0.05, 1);
-  shape.lineTo(0.55, 1);
-  shape.lineTo(0.2, 0.2);
-  shape.lineTo(0.6, 0.2);
-  shape.lineTo(-0.05, -1);
-  shape.lineTo(-0.1, -0.2);
-  shape.lineTo(-0.6, -0.2);
+  shape.moveTo(-w / 2, -h / 2);
+  shape.lineTo(w / 2, -h / 2);
+  shape.lineTo(w / 2, h / 2);
+  shape.lineTo(-w / 2, h / 2);
   shape.closePath();
-  const geom = new ExtrudeGeometry(shape, {
-    depth: 0.2,
-    bevelEnabled: true,
-    bevelThickness: 0.03,
-    bevelSize: 0.03,
-    bevelSegments: 2,
-  });
-  geom.center();
-  geom.scale(0.9, 0.9, 0.9);
+  return shape;
+}
+
+/** The yellow frame round a boost pad: a rectangle with a smaller one cut out. Lies flat, facing up. */
+function boostBorderGeometry(): ShapeGeometry {
+  const shape = rectShape(BOOST_PAD_LENGTH, BOOST_PAD_WIDTH);
+  shape.holes.push(rectShape(BOOST_PAD_LENGTH - 2 * BOOST_PAD_BORDER, BOOST_PAD_WIDTH - 2 * BOOST_PAD_BORDER));
+  const geom = new ShapeGeometry(shape);
+  geom.rotateX(-Math.PI / 2);
+  return geom;
+}
+
+/** A chunky ">" pointing along +X, lying flat on the ground. */
+function chevronGeometry(): ShapeGeometry {
+  const shape = new Shape();
+  shape.moveTo(-0.38, 0.7);
+  shape.lineTo(0.4, 0);
+  shape.lineTo(-0.38, -0.7);
+  shape.lineTo(-0.38, -0.46);
+  shape.lineTo(0.12, 0);
+  shape.lineTo(-0.38, 0.46);
+  shape.closePath();
+  const geom = new ShapeGeometry(shape);
+  geom.rotateX(-Math.PI / 2);
   return geom;
 }
 
@@ -198,14 +236,28 @@ function createAssets() {
     sparkOn: new MeshBasicMaterial({ color: '#ff3b3b' }),
     sparkOff: new MeshBasicMaterial({ color: '#5a1212' }),
 
-    bolt: boltGeometry(),
-    boltMat: new MeshStandardMaterial({
+    padBase: flatRect(BOOST_PAD_LENGTH, BOOST_PAD_WIDTH),
+    padBorder: boostBorderGeometry(),
+    padBaseMat: new MeshStandardMaterial({ color: '#1b1b22', roughness: 0.6 }),
+    padBorderMat: new MeshStandardMaterial({
       color: '#facc15',
       emissive: '#f59e0b',
-      emissiveIntensity: 0.8,
-      roughness: 0.3,
-      metalness: 0.1,
+      emissiveIntensity: 0.6,
+      roughness: 0.4,
     }),
+    chevron: chevronGeometry(),
+    // One material per arrow, shared by every pad, so the chase runs along all of them together.
+    chevronMats: Array.from(
+      { length: BOOST_ARROW_COUNT },
+      () =>
+        new MeshStandardMaterial({
+          color: '#fde047',
+          emissive: '#facc15',
+          emissiveIntensity: 0.2,
+          roughness: 0.4,
+        }),
+    ),
+    flashQuad: flatRect(1, 1),
 
     sphere,
     chunk: new BoxGeometry(0.28, 0.28, 0.28),
@@ -214,7 +266,6 @@ function createAssets() {
     ringMats: {
       missile: glowMaterial('#ff5a36'),
       bomb: glowMaterial('#a855f7'),
-      boost: glowMaterial('#facc15'),
     },
     star: new OctahedronGeometry(0.35),
   };
@@ -267,7 +318,7 @@ function pickupModel(kind: ItemKind, a: Assets): Group {
     tilted.scale.setScalar(MISSILE_PICKUP_SCALE);
     tilted.add(root);
     model.add(tilted);
-  } else if (kind === 'bomb') {
+  } else {
     const { root, tip } = bombMesh(a);
     // A steady glow, not a blink, so it doesn't look like a live bomb.
     tip.material = a.sparkOn;
@@ -275,11 +326,6 @@ function pickupModel(kind: ItemKind, a: Assets): Group {
     // The ball's bottom is at the origin of the model, so this lifts it to the floor line.
     root.position.y = PICKUP_FLOOR - BOX_Y;
     model.add(root);
-  } else {
-    const bolt = new Mesh(a.bolt, a.boltMat);
-    bolt.scale.setScalar(BOLT_PICKUP_SCALE);
-    bolt.position.y = PICKUP_FLOOR + BOLT_HALF_HEIGHT * BOLT_PICKUP_SCALE - BOX_Y;
-    model.add(bolt);
   }
   model.traverse((o) => {
     if (o instanceof Mesh) o.castShadow = true;
@@ -315,6 +361,7 @@ export class ItemScene {
 
   constructor(private readonly items: ItemSystem) {
     items.hazards.forEach((hazard, i) => this.root.add(this.hazardMesh(hazard, i)));
+    items.boostPads.forEach((pad) => this.root.add(this.boostPadMesh(pad)));
     this.boxes = items.pickups.map((pickup, i) => this.boxView(pickup, i));
   }
 
@@ -324,6 +371,7 @@ export class ItemScene {
     this.updateBoxes(dt);
     this.updateMissiles();
     this.updateBombs();
+    this.animateBoostArrows();
     this.updateEffects(dt);
   }
 
@@ -343,6 +391,11 @@ export class ItemScene {
         case 'pickup':
           this.addEffect(this.sparkle(e.x, e.z));
           break;
+        case 'boost': {
+          const pad = this.nearestBoostPad(e.x, e.z);
+          if (pad) this.addEffect(this.boostFlash(pad));
+          break;
+        }
       }
     }
   }
@@ -456,6 +509,49 @@ export class ItemScene {
       view.tip.material = lit ? this.assets.sparkOn : this.assets.sparkOff;
     }
     this.prune(this.bombs, live);
+  }
+
+  /** A flat base, a yellow border and three arrows, turned to the pad's heading. */
+  private boostPadMesh(pad: BoostPad): Group {
+    const { padBase, padBorder, padBaseMat, padBorderMat, chevron, chevronMats } = this.assets;
+    const group = new Group();
+    group.position.set(pad.x, BOOST_PAD_Y, pad.z);
+    // Built along +X, then turned to the heading. Three's Y rotation runs the opposite way (see carModel.ts).
+    group.rotation.y = -pad.heading;
+    const border = new Mesh(padBorder, padBorderMat);
+    border.position.y = 0.003;
+    group.add(new Mesh(padBase, padBaseMat), border);
+    // Arrow 0 is at the back of the pad, so the chase runs back to front.
+    chevronMats.forEach((mat, i) => {
+      const arrow = new Mesh(chevron, mat);
+      arrow.position.set((i - (BOOST_ARROW_COUNT - 1) / 2) * BOOST_ARROW_SPACING, 0.006, 0);
+      group.add(arrow);
+    });
+    group.traverse((o) => {
+      if (o instanceof Mesh) o.receiveShadow = true;
+    });
+    return group;
+  }
+
+  /** Each arrow lights in turn, back to front, once per chase. The materials are shared, so all pads move together. */
+  private animateBoostArrows(): void {
+    this.assets.chevronMats.forEach((mat, i) => {
+      const wave = 0.5 + 0.5 * Math.cos(2 * Math.PI * (this.time / CHASE_PERIOD - i * CHASE_LAG));
+      mat.emissiveIntensity = 0.2 + 1.8 * wave ** 4;
+    });
+  }
+
+  private nearestBoostPad(x: number, z: number): BoostPad | undefined {
+    let best: BoostPad | undefined;
+    let bestDistance = Infinity;
+    for (const pad of this.items.boostPads) {
+      const distance = Math.hypot(x - pad.x, z - pad.z);
+      if (distance < bestDistance) {
+        best = pad;
+        bestDistance = distance;
+      }
+    }
+    return best;
   }
 
   /** Removes views whose sim object has gone. Their meshes use shared assets, so nothing to dispose. */
@@ -578,6 +674,31 @@ export class ItemScene {
       step: (t) => {
         star.scale.setScalar(0.4 + 1.6 * easeOutQuad(t));
         star.rotation.y = t * 6;
+        mat.opacity = 1 - t;
+      },
+    };
+  }
+
+  /** A yellow streak that runs out past both ends of a pad when a car boosts over it. */
+  private boostFlash(pad: BoostPad): Effect {
+    const materials: Material[] = [];
+    const mat = own(
+      materials,
+      new MeshBasicMaterial({ color: '#fde047', transparent: true, depthWrite: false, blending: AdditiveBlending }),
+    );
+    const streak = new Mesh(this.assets.flashQuad, mat);
+    streak.position.y = 0.04;
+    const root = new Group();
+    root.position.set(pad.x, 0, pad.z);
+    root.rotation.y = -pad.heading;
+    root.add(streak);
+    return {
+      root,
+      life: BOOST_FLASH_LIFE,
+      age: 0,
+      materials,
+      step: (t) => {
+        streak.scale.set(BOOST_PAD_LENGTH * (0.8 + 0.6 * easeOutQuad(t)), 1, BOOST_PAD_WIDTH * (1 - 0.6 * t));
         mat.opacity = 1 - t;
       },
     };

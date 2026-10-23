@@ -1,11 +1,11 @@
 import type { CarState } from './carPhysics';
 import type { Projection, TrackPath } from './trackPath';
 
-// Pickups, weapons and track hazards. Pure simulation: the world applies the effects
-// (spins, boosts, slides) to the cars, and the scene draws what's here.
+// Pickups, weapons, boost pads and track hazards. Pure simulation: the world applies the
+// effects (spins, boosts, slides) to the cars, and the scene draws what's here.
 
-export type ItemKind = 'missile' | 'bomb' | 'boost';
-export const ITEM_KINDS: ItemKind[] = ['missile', 'bomb', 'boost'];
+export type ItemKind = 'missile' | 'bomb';
+export const ITEM_KINDS: ItemKind[] = ['missile', 'bomb'];
 
 export type HazardKind = 'oil' | 'puddle';
 
@@ -27,6 +27,8 @@ export interface PickupSpec extends TrackSpot {
 export interface TrackLayout {
   hazards: HazardSpec[];
   pickups: PickupSpec[];
+  /** Strips on the road that boost any car driving over them. */
+  boostPads: TrackSpot[];
 }
 
 const PICKUP_SPACING = 3;
@@ -45,8 +47,14 @@ export const DEMO_LAYOUT: TrackLayout = {
     { kind: 'puddle', at: 0.66, lateral: 2.4, radius: 2 },
     { kind: 'oil', at: 0.82, lateral: -2, radius: 1.6 },
   ],
-  // Each row mixes the three items, in a different order, so taking one means picking a line.
-  pickups: [...pickupRow(0.06, ['missile', 'boost', 'bomb']), ...pickupRow(0.47, ['bomb', 'missile', 'boost'])],
+  // Each row mixes the items, so taking one means picking a line.
+  pickups: [...pickupRow(0.06, ['missile', 'bomb', 'missile']), ...pickupRow(0.47, ['bomb', 'missile', 'bomb'])],
+  // Off the racing line, at the start of fast stretches: worth a detour, but it is one.
+  boostPads: [
+    { at: 0.1, lateral: 2.5 },
+    { at: 0.64, lateral: -1 },
+    { at: 0.88, lateral: 2.8 },
+  ],
 };
 
 export interface Hazard {
@@ -57,6 +65,13 @@ export interface Hazard {
 }
 
 /** A pickup shows what it gives, and always gives the same thing. */
+export interface BoostPad {
+  x: number;
+  z: number;
+  /** Direction of travel over the pad, for drawing its arrows. */
+  heading: number;
+}
+
 export interface Pickup {
   id: number;
   kind: ItemKind;
@@ -100,6 +115,7 @@ export interface RacerStatus {
   slick: number;
   inPuddle: boolean;
   onOil: boolean;
+  onPad: boolean;
 }
 
 export type ItemEvent =
@@ -117,6 +133,8 @@ const MISSILE_HOMING = 10;
 /** Missiles home in on the nearest car up to this far ahead along the track. */
 const MISSILE_RANGE = 60;
 const MISSILE_HIT_RADIUS = 1.4;
+/** Cars touch a boost pad when their centre is within this distance of its middle. */
+export const BOOST_PAD_RADIUS = 1.8;
 const BOMB_DROP_BEHIND = 2.2;
 /** Bombs can't go off until they've had time to fall behind the car that dropped them. */
 const BOMB_ARM_TIME = 0.5;
@@ -157,11 +175,13 @@ const freshStatus = (): RacerStatus => ({
   slick: 0,
   inPuddle: false,
   onOil: false,
+  onPad: false,
 });
 
 export class ItemSystem {
   readonly hazards: Hazard[];
   readonly pickups: Pickup[];
+  readonly boostPads: BoostPad[];
   missiles: Missile[] = [];
   bombs: Bomb[] = [];
   readonly status: RacerStatus[];
@@ -184,6 +204,10 @@ export class ItemSystem {
       respawn: 0,
       ...spotToWorld(track, p),
     }));
+    this.boostPads = layout.boostPads.map((spot) => {
+      const p = track.pointAt(spot.at * track.length);
+      return { ...spotToWorld(track, spot), heading: Math.atan2(p.tz, p.tx) };
+    });
     this.status = Array.from({ length: racerCount }, freshStatus);
   }
 
@@ -212,10 +236,7 @@ export class ItemSystem {
     status.item = null;
     status.holdTime = 0;
 
-    if (item === 'boost') {
-      status.boost = BOOST_TIME;
-      this.events.push({ type: 'boost', racer, x: car.x, z: car.z });
-    } else if (item === 'missile') {
+    if (item === 'missile') {
       const distance = (proj.distance + 2.5) % this.track.length;
       this.missiles.push({
         id: this.nextId++,
@@ -265,6 +286,20 @@ export class ItemSystem {
     this.updateMissiles(dt, cars, projs);
     this.updateBombs(dt, cars);
     this.updateHazards(cars);
+    this.updateBoostPads(cars);
+  }
+
+  private updateBoostPads(cars: CarState[]): void {
+    cars.forEach((car, racer) => {
+      const status = this.status[racer];
+      const onPad = this.boostPads.some((p) => Math.hypot(car.x - p.x, car.z - p.z) < BOOST_PAD_RADIUS);
+      // A spinning car slides over without picking up the boost.
+      if (onPad && !status.onPad && status.spin === 0) {
+        status.boost = BOOST_TIME;
+        this.events.push({ type: 'boost', racer, x: car.x, z: car.z });
+      }
+      status.onPad = onPad;
+    });
   }
 
   private updatePickups(dt: number, cars: CarState[]): void {

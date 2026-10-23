@@ -8,7 +8,7 @@ import {
   type CarTuning,
 } from './carPhysics';
 import { collideCars, collideWithWalls } from './collision';
-import { DEMO_LAYOUT, ItemSystem, SPIN_TIME, type RacerStatus, type TrackLayout } from './items';
+import { BOOST_PAD_RADIUS, DEMO_LAYOUT, ItemSystem, SPIN_TIME, type RacerStatus, type TrackLayout } from './items';
 import { Race, TOTAL_LAPS, type RaceEvent } from './race';
 import { buildRacingLine, type RacingLine } from './racingLine';
 import { gridPosition, OPPONENTS, PLAYER, type Opponent, type RacerInfo } from './racers';
@@ -32,10 +32,6 @@ const AI_MISSILE_RANGE: [number, number] = [4, 35];
 /** ...and drops bombs on cars this far behind, if they're in its lane (within this many metres). */
 const AI_BOMB_RANGE: [number, number] = [2, 9];
 const AI_BOMB_LANE = 1.8;
-/** AI boosts when the line ahead is this fast (share of top speed) for this far (m). */
-const AI_BOOST_STRAIGHT = 0.9;
-const AI_BOOST_LOOKAHEAD = 30;
-
 /** Handling for a car right now, with boosts and oil taken into account. */
 export function effectiveTuning(base: CarTuning, status: RacerStatus): CarTuning {
   let t = base;
@@ -80,6 +76,7 @@ export class RaceWorld {
   /** Item uses requested since the last step. */
   private readonly useRequested: boolean[];
   private hazardObstacles: Obstacle[] | null = null;
+  private padTargets: Obstacle[] | null = null;
 
   constructor(
     readonly track: TrackPath,
@@ -155,7 +152,7 @@ export class RaceWorld {
         const others = cars.filter((c) => c !== racer.car);
         // The player's own autopilot doesn't rubber-band against itself.
         const boost = i === 0 ? 1 : rubberBand(playerProgress - race.progress(i));
-        const decision = racer.driver.drive(racer.car, proj, others, boost, dt, obstacles);
+        const decision = racer.driver.drive(racer.car, proj, others, boost, dt, obstacles, this.boostPadTargets());
         if (decision.respawn) this.resetCar(i);
         else input = decision.input;
         if (this.aiWantsItem(i, proj)) this.useRequested[i] = true;
@@ -202,7 +199,16 @@ export class RaceWorld {
     return [...this.hazardObstacles, ...this.items.bombs.map((b) => obstacle(b.x, b.z, 1.2))];
   }
 
-  /** Simple tactics: fire at cars just ahead, bomb cars just behind, boost on straights. */
+  /** Boost pads in track coordinates, for the AI to aim at. They never move, so this is cached. */
+  private boostPadTargets(): Obstacle[] {
+    this.padTargets ??= this.items.boostPads.map((p) => {
+      const { distance, lateral } = this.track.project(p.x, p.z);
+      return { distance, lateral, radius: BOOST_PAD_RADIUS };
+    });
+    return this.padTargets;
+  }
+
+  /** Simple tactics: fire at cars just ahead, bomb cars close behind. */
   private aiWantsItem(i: number, proj: Projection): boolean {
     const { item, holdTime } = this.items.status[i];
     // Each car waits a slightly different moment before using what it picked up.
@@ -222,13 +228,6 @@ export class RaceWorld {
           Math.abs(this.projs[j].lateral - proj.lateral) < AI_BOMB_LANE,
       );
     }
-
-    const { targetSpeed, spacing } = this.line;
-    const steps = Math.round(AI_BOOST_LOOKAHEAD / spacing);
-    for (let k = 0; k < steps; k++) {
-      const speed = targetSpeed[(proj.index + k) % targetSpeed.length];
-      if (speed < DEFAULT_TUNING.maxSpeed * AI_BOOST_STRAIGHT) return false;
-    }
-    return true;
+    return false;
   }
 }
