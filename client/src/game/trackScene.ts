@@ -16,6 +16,7 @@ import {
   RepeatWrapping,
   Shape,
   ShapeGeometry,
+  Sprite,
   Texture,
 } from 'three';
 import { seededRandom } from './items';
@@ -68,15 +69,22 @@ export function buildTrackScene(track: TrackPath, theme: TrackTheme): Group {
 /** Frees the geometries, materials and textures under an object. Call it before dropping a scene. */
 export function disposeScene(root: Object3D): void {
   root.traverse((object) => {
+    // Every sprite shares one geometry, so only a sprite's material and texture are its own to free.
+    if (object instanceof Sprite) {
+      disposeMaterial(object.material);
+      return;
+    }
     if (!(object instanceof Mesh)) return;
     object.geometry.dispose();
-    for (const material of [object.material].flat() as Material[]) {
-      for (const value of Object.values(material)) {
-        if (value instanceof Texture) value.dispose();
-      }
-      material.dispose();
-    }
+    for (const material of [object.material].flat() as Material[]) disposeMaterial(material);
   });
+}
+
+function disposeMaterial(material: Material): void {
+  for (const value of Object.values(material)) {
+    if (value instanceof Texture) value.dispose();
+  }
+  material.dispose();
 }
 
 function offsetPoint(track: TrackPath, i: number, offset: number) {
