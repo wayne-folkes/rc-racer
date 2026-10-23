@@ -1,4 +1,5 @@
 import { newSeasonState, UPGRADE_KINDS, type SeasonState } from './season';
+import { isVehicleId } from './vehicles';
 
 // Keeps the season in localStorage so a refresh doesn't lose progress. Storage can throw
 // (private windows, blocked site data), so every read and write falls back quietly.
@@ -17,6 +18,8 @@ export function loadSeason(): SeasonState | null {
       Number.isInteger(s.continuesLeft) &&
       Array.isArray(s.results) &&
       STATUSES.has(s.status as string) &&
+      // Seasons saved before vehicles existed have none, and take the default.
+      (s.vehicle === undefined || isVehicleId(s.vehicle)) &&
       UPGRADE_KINDS.every((k) => Number.isInteger(s.levels?.[k]));
     return valid ? { ...newSeasonState(), ...s } : null;
   } catch {

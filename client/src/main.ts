@@ -28,6 +28,7 @@ import { TRACKS, type TrackDef } from './game/tracks';
 import { TrackPath, type Projection } from './game/trackPath';
 import { buildTrackScene, disposeScene } from './game/trackScene';
 import { TouchControls } from './game/touch';
+import type { VehicleId } from './game/vehicles';
 import { createWeather, type WeatherScene } from './game/weatherScene';
 import { NO_INPUT, RaceWorld, type Racer } from './game/world';
 import { BackCard, type MenuCard } from './ui/card';
@@ -35,6 +36,7 @@ import { Garage } from './ui/garage';
 import { PauseCard } from './ui/pause';
 import { SettingsCard } from './ui/settings';
 import { RecordsCard, TitleCard, type TitleInfo } from './ui/title';
+import { VehicleCard } from './ui/vehicle';
 
 const STEP = 1 / 120;
 const MAX_FRAME = 0.25;
@@ -234,7 +236,8 @@ const pauseCard = new PauseCard(canRestart, {
   settings: () => openSettings(false),
   quit: quitToTitle,
 });
-const allCards: MenuCard[] = [titleCard, recordsCard, howtoCard, settingsCard, pauseCard];
+const vehicleCard = new VehicleCard({ choose: startSeason, back: backFromVehicle });
+const allCards: MenuCard[] = [titleCard, recordsCard, howtoCard, settingsCard, pauseCard, vehicleCard];
 
 /** Takes the current race's scene, cars and item effects out of the scene and frees them. */
 function clearRace(): void {
@@ -267,6 +270,7 @@ function buildRace(def: TrackDef, mode: BuildMode): void {
   raceCount++;
   world = new RaceWorld(track, {
     layout: def.layout,
+    vehicle: season.state.vehicle,
     playerTuning: season.playerTuning,
     opponentPace: season.opponentPace,
     seed: raceCount,
@@ -280,9 +284,10 @@ function buildRace(def: TrackDef, mode: BuildMode): void {
   scene.add(rampScene);
   itemScene = new ItemScene(world.items);
   scene.add(itemScene.root);
-  // One model per racer, in the same order as world.racers, so index 0 is the player.
+  // One model per racer, in the same order as world.racers, so index 0 is the player. Everyone drives
+  // the same vehicle.
   carViews = world.racers.map((racer) => {
-    const model = new CarModel(racer.info.color);
+    const model = new CarModel(racer.info.color, season.state.vehicle);
     scene.add(model.root);
     return { racer, model };
   });
@@ -330,10 +335,22 @@ function retryRace(): void {
   startRace();
 }
 
+/** Asks which vehicle to start a season in. The current season isn't touched until one is picked, so backing out keeps it. */
 function newSeason(): void {
-  season.restart();
+  results.root.hidden = true;
+  pushCard(vehicleCard);
+}
+
+function startSeason(vehicle: VehicleId): void {
+  season.restart(vehicle);
   persist();
   startRace();
+}
+
+/** Backs out of the vehicle card: to the title it came from, or to the results card if it came from there. */
+function backFromVehicle(): void {
+  popCard();
+  if (cardStack.length === 0) results.root.hidden = false;
 }
 
 /** Carries on with the saved season where it was left: the race, the garage or the summary card. */

@@ -50,6 +50,10 @@ export interface CarTuning {
   driftTurnBoost: number;
   /** How quickly steering follows the input (1/s). */
   steerResponse: number;
+  /** Fraction of grip left on an oil slick: lower slides more. */
+  slickGrip: number;
+  /** Extra drag (1/s) while driving through a puddle. */
+  puddleDrag: number;
 }
 
 export const DEFAULT_TUNING: CarTuning = {
@@ -67,6 +71,8 @@ export const DEFAULT_TUNING: CarTuning = {
   driftGrip: 1.4,
   driftTurnBoost: 1.35,
   steerResponse: 12,
+  slickGrip: 0.1,
+  puddleDrag: 1.6,
 };
 
 export function createCar(x: number, z: number, heading: number): CarState {
