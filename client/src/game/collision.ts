@@ -4,14 +4,42 @@ import type { Projection, TrackPath } from './trackPath';
 export const CAR_RADIUS = 0.9;
 /** Share of the into-wall speed that bounces back out. */
 const RESTITUTION = 0.35;
-/** Share of the along-wall speed kept when scraping a wall. */
-const SCRAPE_KEEP = 0.9;
+/**
+ * Wall friction: along-wall speed lost per unit of the push into the wall (Coulomb friction). It scales
+ * with how hard the car presses, so a slam costs a lot, but a car sliding along a wall pays only for the
+ * small push each step. A fixed share per step would be charged 120 times a second and glue the car to the
+ * wall.
+ */
+const WALL_FRICTION = 0.25;
+/**
+ * How fast (1/s) a wall swings a car's nose round towards running alongside it. Without this a car aimed
+ * at a wall is driven into it every step and stays pinned however long the gas is held; with it the car
+ * peels away and slides along, in about a third of a second.
+ */
+const WALL_SWING = 8;
+/**
+ * Drag (1/s) on a car while it's rubbing a wall, whatever its angle, so riding the outside of a bend is
+ * slower than driving the road. It's per second, not per step: a modest cost that can't build into a
+ * stop.
+ */
+const WALL_DRAG = 0.8;
+
+/** The signed angle from b to a, in (-PI, PI]. */
+const angleBetween = (a: number, b: number) => {
+  const twoPi = 2 * Math.PI;
+  return ((((a - b + Math.PI) % twoPi) + twoPi) % twoPi) - Math.PI;
+};
 
 /**
  * Keeps the car between the walls on either side of the track. Returns the projection of the
- * car's final position and whether it hit a wall.
+ * car's final position and whether it hit a wall. `dt` is the length of the physics step, for the
+ * wall's swing of the car's nose.
  */
-export function collideWithWalls(car: CarState, track: TrackPath): { proj: Projection; hit: boolean } {
+export function collideWithWalls(
+  car: CarState,
+  track: TrackPath,
+  dt = 1 / 120,
+): { proj: Projection; hit: boolean } {
   let proj = track.project(car.x, car.z);
   const limit = track.halfWidth - CAR_RADIUS;
   const overlap = Math.abs(proj.lateral) - limit;
@@ -24,13 +52,28 @@ export function collideWithWalls(car: CarState, track: TrackPath): { proj: Proje
   car.x -= nx * overlap;
   car.z -= nz * overlap;
 
+  // A nose pointing into the wall swings round, a share of the way to parallel each step, in whichever
+  // direction is shorter. A car already pointing along or away from the wall is left alone.
+  const noseToWall = angleBetween(car.heading, Math.atan2(nz, nx));
+  if (Math.abs(noseToWall) < Math.PI / 2) {
+    const toParallel = Math.PI / 2 - Math.abs(noseToWall);
+    car.heading += (noseToWall < 0 ? -1 : 1) * toParallel * (1 - Math.exp(-WALL_SWING * dt));
+  }
+
   const into = car.vx * nx + car.vz * nz;
   if (into > 0) {
     const tx = car.vx - into * nx;
     const tz = car.vz - into * nz;
-    car.vx = tx * SCRAPE_KEEP - into * RESTITUTION * nx;
-    car.vz = tz * SCRAPE_KEEP - into * RESTITUTION * nz;
+    // The push into the wall this step: it stops the car and bounces it back out.
+    const push = into * (1 + RESTITUTION);
+    const alongSpeed = Math.hypot(tx, tz);
+    const keep = alongSpeed > 0 ? Math.max(0, 1 - (WALL_FRICTION * push) / alongSpeed) : 0;
+    car.vx = tx * keep - into * RESTITUTION * nx;
+    car.vz = tz * keep - into * RESTITUTION * nz;
   }
+  const rub = Math.exp(-WALL_DRAG * dt);
+  car.vx *= rub;
+  car.vz *= rub;
 
   proj = track.project(car.x, car.z);
   return { proj, hit: into > 0 };
