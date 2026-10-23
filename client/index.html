@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RC Racer</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="banner" class="banner" aria-live="assertive" hidden></div>
+    <div id="hud" class="hud">
+      <div class="hud-panel">
+        <div class="hud-row"><span class="hud-label">Lap</span><span id="hud-lap">1 / 3</span></div>
+        <div class="hud-row"><span class="hud-label">Time</span><span id="hud-time">0:00.00</span></div>
+        <div class="hud-row"><span class="hud-label">Lap time</span><span id="hud-lap-time">0:00.00</span></div>
+        <div class="hud-row"><span class="hud-label">Best</span><span id="hud-best">--</span></div>
+      </div>
+      <div class="hud-panel hud-speed"><span id="hud-speed">0</span><span class="hud-label">km/h</span></div>
+    </div>
+    <div id="results" class="results" hidden>
+      <div class="results-card" role="dialog" aria-labelledby="results-title">
+        <h2 id="results-title" class="results-title">Race complete</h2>
+        <div class="results-stat">
+          <span class="results-label">Total</span>
+          <div class="results-value-row">
+            <span id="results-total" class="results-total">0:00.00</span>
+            <span id="results-total-badge" class="results-badge" hidden>New record!</span>
+          </div>
+          <span id="results-total-record" class="results-record"></span>
+        </div>
+        <div class="results-stat">
+          <span class="results-label">Best lap</span>
+          <div class="results-value-row">
+            <span id="results-best" class="results-best">0:00.00</span>
+            <span id="results-best-badge" class="results-badge" hidden>New record!</span>
+          </div>
+          <span id="results-best-record" class="results-record"></span>
+        </div>
+        <ol id="results-laps" class="results-laps"></ol>
+        <button id="results-again" class="results-button" type="button">Race again</button>
+      </div>
+    </div>
+    <div class="help">
+      <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> or <kbd>WASD</kbd> drive · <kbd>Space</kbd> handbrake ·
+      <kbd>R</kbd> reset · <kbd>Enter</kbd> race again
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
