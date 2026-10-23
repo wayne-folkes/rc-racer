@@ -62,6 +62,10 @@ export interface WorldOptions {
   layout?: TrackLayout;
   /** Seed for item boxes and oil, so races are repeatable. */
   seed?: number;
+  /** The player's car handling, e.g. with upgrades bought between races. */
+  playerTuning?: CarTuning;
+  /** Multiplier on every opponent's pace; the season raises it round by round. */
+  opponentPace?: number;
 }
 
 export class RaceWorld {
@@ -69,6 +73,7 @@ export class RaceWorld {
   readonly racers: Racer[];
   race: Race;
   readonly items: ItemSystem;
+  private readonly playerTuning: CarTuning;
   /** The player's projection onto the track after the last step. */
   playerProj: Projection;
   /** Every car's projection after the last step. */
@@ -84,13 +89,17 @@ export class RaceWorld {
   ) {
     this.line = buildRacingLine(track);
     const opponents = options.opponents ?? OPPONENTS;
-    const playerDriver = options.autopilot ? new AiDriver(track, this.line, options.autopilot) : null;
+    this.playerTuning = options.playerTuning ?? DEFAULT_TUNING;
+    const playerDriver = options.autopilot
+      ? new AiDriver(track, this.line, options.autopilot, this.playerTuning)
+      : null;
+    const opponentPace = options.opponentPace ?? 1;
     this.racers = [
       { info: PLAYER, car: gridPosition(track, PLAYER.gridSlot), driver: playerDriver },
       ...opponents.map((o) => ({
         info: o,
         car: gridPosition(track, o.gridSlot),
-        driver: new AiDriver(track, this.line, o.skill),
+        driver: new AiDriver(track, this.line, { ...o.skill, pace: o.skill.pace * opponentPace }),
       })),
     ];
     this.race = this.newRace();
@@ -160,7 +169,7 @@ export class RaceWorld {
         input = playerInput;
       }
 
-      const base = racer.driver?.tuning ?? DEFAULT_TUNING;
+      const base = racer.driver?.tuning ?? this.playerTuning;
       stepCar(racer.car, input, dt, effectiveTuning(base, status));
       if (status.spin > 0) racer.car.heading += SPIN_RATE * (status.spin / SPIN_TIME) * dt;
       if (status.inPuddle) {

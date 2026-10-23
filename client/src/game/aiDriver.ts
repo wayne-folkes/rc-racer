@@ -34,7 +34,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
  * minus the AI car's, in metres.
  */
 export function rubberBand(gap: number): number {
-  return clamp(1 + gap * 0.003, 0.88, 1.03);
+  return clamp(1 + gap * 0.003, 0.92, 1.03);
 }
 
 export interface AiDecision {
@@ -70,7 +70,7 @@ interface Traffic {
 
 export class AiDriver {
   /** This car's handling. Its top speed tracks the driver's pace, including rubber-banding. */
-  readonly tuning: CarTuning = { ...DEFAULT_TUNING };
+  readonly tuning: CarTuning;
   private stuckTime = 0;
   /** Current sideways shift from the racing line; eases towards the wanted shift. */
   private shift = 0;
@@ -84,7 +84,11 @@ export class AiDriver {
     private readonly track: TrackPath,
     private readonly line: RacingLine,
     readonly skill: AiSkill,
-  ) {}
+    /** The car's own handling before pace is applied, e.g. with upgrades. */
+    private readonly baseTuning: CarTuning = DEFAULT_TUNING,
+  ) {
+    this.tuning = { ...baseTuning };
+  }
 
   /**
    * @param proj The car's projection onto the track.
@@ -103,7 +107,7 @@ export class AiDriver {
     boostPads: Obstacle[] = [],
   ): AiDecision {
     const pace = this.skill.pace * paceBoost;
-    this.tuning.maxSpeed = DEFAULT_TUNING.maxSpeed * pace;
+    this.tuning.maxSpeed = this.baseTuning.maxSpeed * pace;
 
     const n = this.line.points.length;
     const lookahead = 5 + speed(car) * 0.3;

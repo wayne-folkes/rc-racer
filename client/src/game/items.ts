@@ -43,7 +43,7 @@ export function pickupRow(at: number, kinds: [ItemKind, ItemKind, ItemKind]): Pi
 export const DEMO_LAYOUT: TrackLayout = {
   hazards: [
     { kind: 'puddle', at: 0.15, lateral: -1, radius: 2.2 },
-    { kind: 'oil', at: 0.36, lateral: 1.8, radius: 1.6 },
+    { kind: 'oil', at: 0.23, lateral: 2.6, radius: 1.6 },
     { kind: 'puddle', at: 0.66, lateral: 2.4, radius: 2 },
     { kind: 'oil', at: 0.82, lateral: -2, radius: 1.6 },
   ],

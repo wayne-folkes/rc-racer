@@ -2,6 +2,7 @@ import {
   ACESFilmicToneMapping,
   Color,
   DirectionalLight,
+  Group,
   HemisphereLight,
   PCFSoftShadowMap,
   Scene,
@@ -16,20 +17,24 @@ import type { ItemKind } from './game/items';
 import { ItemScene } from './game/itemScene';
 import { formatTime, type RaceEvent } from './game/race';
 import { updateRecords } from './game/records';
-import { buildTrackScene } from './game/trackScene';
-import { DEMO_TRACK, TrackPath, type Projection } from './game/trackPath';
-import { RaceWorld } from './game/world';
+import { QUALIFYING_POSITION, Season, type SeasonStatus } from './game/season';
+import { loadSeason, saveSeason } from './game/seasonStorage';
+import { TRACKS, type TrackDef } from './game/tracks';
+import { TrackPath, type Projection } from './game/trackPath';
+import { buildTrackScene, disposeScene } from './game/trackScene';
+import { createWeather, type WeatherScene } from './game/weatherScene';
+import { RaceWorld, type Racer } from './game/world';
+import { Garage } from './ui/garage';
 
 const STEP = 1 / 120;
 const MAX_FRAME = 0.25;
 const SHADOW_EXTENT = 40;
-const TRACK_ID = 'demo';
 const ORDINAL_SUFFIXES = ['th', 'st', 'nd', 'rd'];
 /** Dot product of car velocity and track direction below this means the car is going the wrong way. */
 const WRONG_WAY_DOT = -3;
 /** Seconds of wrong-way driving before the WRONG WAY banner shows. */
 const WRONG_WAY_DELAY = 0.6;
-/** Starts the race over from the grid at any point. */
+/** Starts the race over from the grid while a race is on. */
 const RESTART_KEY = 'KeyN';
 /** Keys that use the held item. */
 const FIRE_KEYS = ['KeyX', 'ShiftLeft', 'ShiftRight'];
@@ -42,10 +47,16 @@ type BannerTone = 'white' | 'green' | 'accent' | 'red';
 interface Banner {
   text: string;
   tone: BannerTone;
+  /** Smaller line under the text, e.g. the round's name during the countdown. */
+  sub?: string;
 }
 interface TimedBanner extends Banner {
   seconds: number;
   onDone?: () => void;
+}
+interface CarView {
+  racer: Racer;
+  model: CarModel;
 }
 
 const container = document.getElementById('app')!;
@@ -76,23 +87,27 @@ Object.assign(sun.shadow.camera, {
 sun.shadow.bias = -0.0005;
 scene.add(sun, sun.target);
 
-const track = new TrackPath(DEMO_TRACK, 5.5);
-scene.add(buildTrackScene(track));
+const season = new Season(TRACKS, loadSeason() ?? undefined);
 
-const world = new RaceWorld(track);
-// One model per racer, in the same order as world.racers, so index 0 is the player.
-const carViews = world.racers.map((racer) => {
-  const model = new CarModel(racer.info.color);
-  scene.add(model.root);
-  return { racer, model };
-});
+function persist(): void {
+  saveSeason(season.state);
+}
 
-const itemScene = new ItemScene(world.items);
-scene.add(itemScene.root);
+// Everything below is rebuilt for each race (see buildRace).
+let track: TrackPath;
+let world: RaceWorld;
+let itemScene: ItemScene;
+let weather: WeatherScene | null = null;
+let trackScene: Group | null = null;
+let carViews: CarView[] = [];
+/** False while the garage or a summary card is up: the scene is built but nothing moves. */
+let live = true;
+let raceCount = 0;
+/** Round label for the HUD and the countdown banner. */
+let roundHud = '';
+let roundBanner = '';
 
 const followCamera = new FollowCamera();
-followCamera.snapTo(world.player);
-
 const keyboard = new Keyboard();
 let wrongWayTime = 0;
 let timedBanner: TimedBanner | null = null;
@@ -101,6 +116,7 @@ let standingsKey = '';
 let shownItem: ItemKind | null = null;
 
 const hud = {
+  round: document.getElementById('hud-round')!,
   lap: document.getElementById('hud-lap')!,
   time: document.getElementById('hud-time')!,
   lapTime: document.getElementById('hud-lap-time')!,
@@ -109,7 +125,6 @@ const hud = {
   positionTotal: document.getElementById('hud-position-total')!,
   speed: document.getElementById('hud-speed')!,
 };
-hud.positionTotal.textContent = `/ ${world.racers.length}`;
 
 const itemSlot = {
   root: document.getElementById('hud-item')!,
@@ -118,10 +133,14 @@ const itemSlot = {
 };
 
 const banner = document.getElementById('banner')!;
+const bannerText = document.getElementById('banner-text')!;
+const bannerSub = document.getElementById('banner-sub')!;
 
 const results = {
   root: document.getElementById('results')!,
   title: document.getElementById('results-title')!,
+  subtitle: document.getElementById('results-subtitle')!,
+  race: document.getElementById('results-race')!,
   total: document.getElementById('results-total')!,
   totalBadge: document.getElementById('results-total-badge')!,
   totalRecord: document.getElementById('results-total-record')!,
@@ -130,8 +149,110 @@ const results = {
   bestRecord: document.getElementById('results-best-record')!,
   standings: document.getElementById('results-standings')!,
   laps: document.getElementById('results-laps')!,
-  again: document.getElementById('results-again')!,
+  money: document.getElementById('results-money')!,
+  primary: document.getElementById('results-primary') as HTMLButtonElement,
+  secondary: document.getElementById('results-secondary') as HTMLButtonElement,
 };
+
+const garage = new Garage(season, {
+  buy: (kind) => {
+    season.buy(kind);
+    persist();
+  },
+  nextRace: () => {
+    season.nextRace();
+    persist();
+    startRace();
+  },
+});
+
+/** Takes the current race's scene, cars and item effects out of the scene and frees them. */
+function clearRace(): void {
+  if (!trackScene) return;
+  const objects = [trackScene, itemScene.root, ...carViews.map((view) => view.model.root)];
+  for (const object of objects) {
+    scene.remove(object);
+    disposeScene(object);
+  }
+  if (weather) {
+    scene.remove(weather.root);
+    disposeScene(weather.root);
+    weather.dispose();
+    weather = null;
+  }
+  carViews = [];
+  trackScene = null;
+}
+
+/**
+ * Builds a race on a track: the scene, the cars and the race itself. A race that isn't `playing`
+ * sits on the grid, with nothing moving, until something starts it.
+ */
+function buildRace(def: TrackDef, playing: boolean): void {
+  clearRace();
+  track = new TrackPath(def.controlPoints, def.halfWidth);
+  // A new seed on every build, so a retry doesn't replay the same item boxes.
+  raceCount++;
+  world = new RaceWorld(track, {
+    layout: def.layout,
+    playerTuning: season.playerTuning,
+    opponentPace: season.opponentPace,
+    seed: raceCount,
+  });
+
+  trackScene = buildTrackScene(track, def.theme);
+  scene.add(trackScene);
+  itemScene = new ItemScene(world.items);
+  scene.add(itemScene.root);
+  // One model per racer, in the same order as world.racers, so index 0 is the player.
+  carViews = world.racers.map((racer) => {
+    const model = new CarModel(racer.info.color);
+    scene.add(model.root);
+    return { racer, model };
+  });
+  weather = createWeather(def.theme.weather, raceCount);
+  if (weather) scene.add(weather.root);
+  scene.background = new Color(def.theme.sky);
+
+  const number = season.tracks.indexOf(def) + 1;
+  roundHud = `Round ${number}/${season.tracks.length} · ${def.name}`;
+  roundBanner = `Round ${number} · ${def.name}`;
+  hud.round.textContent = roundHud;
+  hud.positionTotal.textContent = `/ ${world.racers.length}`;
+
+  live = playing;
+  document.body.classList.toggle('is-idle', !playing);
+  wrongWayTime = 0;
+  timedBanner = null;
+  standingsKey = '';
+  followCamera.snapTo(world.player);
+}
+
+/** Starts a race on the season's current track. */
+function startRace(): void {
+  buildRace(season.track, true);
+  garage.hide();
+  results.root.hidden = true;
+}
+
+/** Shows the garage over the scene of the next track, which stays still until the next race starts. */
+function openGarage(): void {
+  results.root.hidden = true;
+  buildRace(season.tracks[season.state.round + 1] ?? season.track, false);
+  garage.show();
+}
+
+function retryRace(): void {
+  season.retry();
+  persist();
+  startRace();
+}
+
+function newSeason(): void {
+  season.restart();
+  persist();
+  startRace();
+}
 
 /** Puts the player's car back on the centreline nearest to it, facing the way the track runs. */
 function resetCar(): void {
@@ -139,16 +260,8 @@ function resetCar(): void {
   wrongWayTime = 0;
 }
 
-function restartRace(): void {
-  world.restart();
-  itemScene.reset();
-  wrongWayTime = 0;
-  timedBanner = null;
-  results.root.hidden = true;
-  followCamera.snapTo(world.player);
-}
-
 function fixedUpdate(dt: number): void {
+  if (!live) return;
   handleRaceEvents(world.step(dt, keyboard.carInput()));
   updateWrongWay(dt, world.playerProj);
 }
@@ -186,10 +299,13 @@ function tickTimedBanner(dt: number): void {
   onDone?.();
 }
 
-/** A timed message wins, then the countdown, then WRONG WAY. */
+/** A timed message wins, then the countdown, then WRONG WAY. Nothing shows while the scene is idle. */
 function currentBanner(): Banner | null {
+  if (!live) return null;
   if (timedBanner) return { text: timedBanner.text, tone: timedBanner.tone };
-  if (world.race.phase === 'countdown') return { text: String(Math.ceil(world.race.countdown)), tone: 'white' };
+  if (world.race.phase === 'countdown') {
+    return { text: String(Math.ceil(world.race.countdown)), tone: 'white', sub: roundBanner };
+  }
   if (wrongWayTime > WRONG_WAY_DELAY) return { text: 'WRONG WAY', tone: 'red' };
   return null;
 }
@@ -197,7 +313,7 @@ function currentBanner(): Banner | null {
 /** Shows the current banner, replaying the pop animation whenever its text or colour changes. */
 function updateBanner(): void {
   const next = currentBanner();
-  const key = next ? `${next.tone}:${next.text}` : '';
+  const key = next ? `${next.tone}:${next.text}:${next.sub ?? ''}` : '';
   if (key === shownBannerKey) return;
   shownBannerKey = key;
 
@@ -206,7 +322,9 @@ function updateBanner(): void {
     banner.hidden = true;
     return;
   }
-  banner.textContent = next.text;
+  bannerText.textContent = next.text;
+  bannerSub.textContent = next.sub ?? '';
+  bannerSub.hidden = !next.sub;
   banner.dataset.tone = next.tone;
   banner.hidden = false;
   void banner.offsetWidth;
@@ -315,14 +433,14 @@ function updateStandings(): void {
   results.standings.replaceChildren(...order.map((racer, i) => standingRow(racer, i + 1)));
 }
 
-/** Records the finished race, then fills in and shows the results card. */
+/** Records the finished race, scores it for the season, then fills in and shows the results card. */
 function showResults(): void {
   const raceTime = world.race.finishTime ?? world.race.clock;
   const bestLap = world.race.player.bestLap;
-  const { previous, records, newRaceRecord, newLapRecord } = updateRecords(TRACK_ID, raceTime, bestLap);
+  const { previous, records, newRaceRecord, newLapRecord } = updateRecords(season.track.id, raceTime, bestLap);
 
-  const place = world.race.position(0);
-  results.title.textContent = place === 1 ? 'You won!' : `You finished ${ordinal(place)}`;
+  season.finishRace(world.race.position(0), raceTime);
+  persist();
 
   results.total.textContent = formatTime(raceTime);
   results.totalBadge.hidden = !newRaceRecord;
@@ -339,14 +457,108 @@ function showResults(): void {
   const bestIndex = lapTimes.indexOf(Math.min(...lapTimes));
   results.laps.replaceChildren(...lapTimes.map((time, i) => lapRow(i, time, i === bestIndex)));
 
+  showEndCard(true);
+}
+
+function endTitle(status: SeasonStatus, place: number | undefined): string {
+  if (status === 'gameOver') return 'Game over';
+  if (status === 'champion') return 'Champion!';
+  if (place === undefined) return 'Race complete';
+  return place === 1 ? 'You won!' : `You finished ${ordinal(place)}`;
+}
+
+function endSubtitle(status: SeasonStatus): string {
+  switch (status) {
+    case 'failed':
+      return `Only the top ${QUALIFYING_POSITION} go through`;
+    case 'gameOver':
+      return `No continues left. Only the top ${QUALIFYING_POSITION} go through.`;
+    case 'champion':
+      return `You won all ${season.tracks.length} rounds.`;
+    default:
+      return '';
+  }
+}
+
+/** Sets a results button's label and action, or hides it when the label is null. */
+function setButton(button: HTMLButtonElement, label: string | null, action: () => void = () => {}): void {
+  button.hidden = label === null;
+  button.textContent = label ?? '';
+  button.onclick = action;
+}
+
+/**
+ * Fills the results card for the season's status. After a race it shows the race stats too; after
+ * a reload it's the same buttons without them.
+ */
+function showEndCard(raced: boolean): void {
+  const { status, results: history, money, continuesLeft } = season.state;
+  const latest = history[history.length - 1];
+
+  results.race.hidden = !raced;
+  results.title.textContent = endTitle(status, latest?.position);
+  results.subtitle.textContent = endSubtitle(status);
+  results.subtitle.hidden = !results.subtitle.textContent;
+
+  const prize = latest?.prize ?? 0;
+  const won = raced ? `${prize > 0 ? `Prize $${prize}` : 'No prize'} · ` : '';
+  results.money.textContent = `${won}Money $${money}`;
+
+  switch (status) {
+    case 'shop':
+      setButton(results.primary, 'Continue to garage', openGarage);
+      setButton(results.secondary, null);
+      break;
+    case 'failed': {
+      const unit = continuesLeft === 1 ? 'continue' : 'continues';
+      setButton(results.primary, `Retry race (${continuesLeft} ${unit} left)`, retryRace);
+      setButton(results.secondary, 'New season', newSeason);
+      break;
+    }
+    default:
+      setButton(results.primary, 'New season', newSeason);
+      setButton(results.secondary, null);
+  }
   results.root.hidden = false;
 }
 
-results.again.addEventListener('click', restartRace);
+/** The button Enter presses: the garage's next race, or the results card's primary button. */
+function enterButton(): HTMLButtonElement | null {
+  if (garage.open) return garage.next;
+  if (!results.root.hidden) return results.primary;
+  return null;
+}
+
+// Enter presses the open card's main button. Preventing the default stops a focused button firing twice.
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || e.repeat) return;
+  const button = enterButton();
+  if (!button) return;
+  e.preventDefault();
+  button.click();
+});
+
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  followCamera.resize(window.innerWidth, window.innerHeight);
+});
 
 // Dev-only handle for poking at game state from the browser console.
 if (import.meta.env.DEV) {
-  Object.assign(window, { __game: { world, track, itemScene } });
+  Object.assign(window, {
+    __game: {
+      get world() {
+        return world;
+      },
+      get track() {
+        return track;
+      },
+      get itemScene() {
+        return itemScene;
+      },
+      season,
+    },
+  });
 }
 
 let last = performance.now();
@@ -356,10 +568,14 @@ function frame(now: number): void {
   const dt = Math.min(MAX_FRAME, (now - last) / 1000);
   last = now;
 
-  if (keyboard.wasPressed('KeyR') && world.race.phase === 'racing') resetCar();
-  // N restarts at any point; Enter also does on the results card, next to its button.
-  if (keyboard.wasPressed(RESTART_KEY) || (!results.root.hidden && keyboard.wasPressed('Enter'))) restartRace();
-  if (world.race.phase === 'racing' && FIRE_KEYS.some((code) => keyboard.wasPressed(code))) world.useItem(0);
+  if (live && keyboard.wasPressed('KeyR') && world.race.phase === 'racing') resetCar();
+  // N starts the race again on the same track without spending a continue. Only while a race is on.
+  // Once over the line the result stands, so a 4th place can't be dodged by restarting.
+  const canRestart = season.state.status === 'racing' && world.race.phase !== 'finished';
+  if (canRestart && keyboard.wasPressed(RESTART_KEY)) startRace();
+  if (live && world.race.phase === 'racing' && FIRE_KEYS.some((code) => keyboard.wasPressed(code))) {
+    world.useItem(0);
+  }
   keyboard.endFrame();
 
   accumulator += dt;
@@ -372,6 +588,8 @@ function frame(now: number): void {
   updateBanner();
   itemScene.update(dt);
   itemScene.handleEvents(world.items.drainEvents());
+  // Ambient, so it keeps moving behind the garage and results cards too.
+  weather?.update(dt, world.player.x, world.player.z);
   // carViews are in the same order as world.racers, so index i matches world.items.status[i].
   carViews.forEach(({ racer, model }, i) => {
     model.setBoosting(world.items.status[i].boost > 0);
@@ -382,15 +600,24 @@ function frame(now: number): void {
   sun.target.position.set(world.player.x, 0, world.player.z);
   updateHud();
   updateItemSlot();
-  if (!results.root.hidden) updateStandings();
+  if (live && !results.root.hidden) updateStandings();
 
   renderer.render(scene, followCamera.camera);
   requestAnimationFrame(frame);
 }
 
-window.addEventListener('resize', () => {
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  followCamera.resize(window.innerWidth, window.innerHeight);
-});
+// Pick up where the saved season left off.
+switch (season.state.status) {
+  case 'racing':
+    startRace();
+    break;
+  case 'shop':
+    openGarage();
+    break;
+  default:
+    // Failed, game over or champion: the same card as after a race, without the race stats.
+    buildRace(season.track, false);
+    showEndCard(false);
+}
 
 requestAnimationFrame(frame);

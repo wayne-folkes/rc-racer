@@ -7,10 +7,14 @@
   </head>
   <body>
     <div id="app"></div>
-    <div id="banner" class="banner" aria-live="assertive" hidden></div>
+    <div id="banner" class="banner" aria-live="assertive" hidden>
+      <span id="banner-text"></span>
+      <div id="banner-sub" class="banner-sub" hidden></div>
+    </div>
     <div id="hud" class="hud">
       <div class="hud-stack">
         <div class="hud-panel">
+          <div id="hud-round" class="hud-round"></div>
           <div class="hud-row"><span class="hud-label">Lap</span><span id="hud-lap">1 / 3</span></div>
           <div class="hud-row"><span class="hud-label">Time</span><span id="hud-time">0:00.00</span></div>
           <div class="hud-row"><span class="hud-label">Lap time</span><span id="hud-lap-time">0:00.00</span></div>
@@ -35,28 +39,41 @@
     <div id="results" class="results" hidden>
       <div class="results-card" role="dialog" aria-labelledby="results-title">
         <h2 id="results-title" class="results-title">Race complete</h2>
-        <div class="results-stat">
-          <span class="results-label">Total</span>
-          <div class="results-value-row">
-            <span id="results-total" class="results-total">0:00.00</span>
-            <span id="results-total-badge" class="results-badge" hidden>New record!</span>
+        <p id="results-subtitle" class="results-subtitle" hidden></p>
+        <div id="results-race" class="results-race">
+          <div class="results-stat">
+            <span class="results-label">Total</span>
+            <div class="results-value-row">
+              <span id="results-total" class="results-total">0:00.00</span>
+              <span id="results-total-badge" class="results-badge" hidden>New record!</span>
+            </div>
+            <span id="results-total-record" class="results-record"></span>
           </div>
-          <span id="results-total-record" class="results-record"></span>
-        </div>
-        <div class="results-stat">
-          <span class="results-label">Best lap</span>
-          <div class="results-value-row">
-            <span id="results-best" class="results-best">0:00.00</span>
-            <span id="results-best-badge" class="results-badge" hidden>New record!</span>
+          <div class="results-stat">
+            <span class="results-label">Best lap</span>
+            <div class="results-value-row">
+              <span id="results-best" class="results-best">0:00.00</span>
+              <span id="results-best-badge" class="results-badge" hidden>New record!</span>
+            </div>
+            <span id="results-best-record" class="results-record"></span>
           </div>
-          <span id="results-best-record" class="results-record"></span>
+          <div class="results-stat">
+            <span class="results-label">Standings</span>
+            <ol id="results-standings" class="results-standings"></ol>
+          </div>
+          <ol id="results-laps" class="results-laps"></ol>
         </div>
-        <div class="results-stat">
-          <span class="results-label">Standings</span>
-          <ol id="results-standings" class="results-standings"></ol>
-        </div>
-        <ol id="results-laps" class="results-laps"></ol>
-        <button id="results-again" class="results-button" type="button">Race again</button>
+        <p id="results-money" class="results-money"></p>
+        <button id="results-primary" class="results-button" type="button"></button>
+        <button id="results-secondary" class="results-button results-button-secondary" type="button" hidden></button>
+      </div>
+    </div>
+    <div id="garage" class="results garage" hidden>
+      <div class="results-card" role="dialog" aria-labelledby="garage-title">
+        <h2 id="garage-title" class="results-title">Garage</h2>
+        <p id="garage-money" class="garage-money">$0</p>
+        <ul id="garage-upgrades" class="garage-upgrades"></ul>
+        <button id="garage-next" class="results-button" type="button">Next race</button>
       </div>
     </div>
     <div class="help">

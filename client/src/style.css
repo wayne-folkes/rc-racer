@@ -9,6 +9,9 @@
   --card-bg: rgb(2 6 23 / 0.92);
   --ink: #0f172a;
   --sky: #8fc7e8;
+  --panel-soft: rgb(255 255 255 / 0.06);
+  --panel-line: rgb(255 255 255 / 0.25);
+  --disabled: rgb(255 255 255 / 0.12);
   --font: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
 }
 
@@ -76,6 +79,15 @@ body {
   color: var(--hud-muted);
   font-size: 18px;
   font-weight: 600;
+}
+
+.hud-round {
+  margin-bottom: 4px;
+  color: var(--hud-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .hud-row {
@@ -158,6 +170,26 @@ body {
   animation: pop 300ms ease-out;
 }
 
+/* On a dark pill like the HUD panels, so it reads on sand and snow as well as grass. */
+.banner-sub {
+  display: block;
+  width: fit-content;
+  margin: 8px auto 0;
+  padding: 4px 16px;
+  border-radius: 999px;
+  background: var(--hud-bg);
+  color: var(--hud-text);
+  font-size: clamp(14px, 3.5vw, 22px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-shadow: none;
+}
+
+.banner-sub[hidden] {
+  display: none;
+}
+
 .banner[data-tone='white'] {
   color: var(--hud-text);
 }
@@ -214,6 +246,19 @@ body {
   margin: 0 0 12px;
   font-size: 22px;
   font-weight: 700;
+}
+
+.results-subtitle {
+  margin: -6px 0 14px;
+  color: var(--hud-muted);
+  font-size: 15px;
+}
+
+.results-money {
+  margin: 0 0 16px;
+  color: var(--hud-accent);
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .results-stat {
@@ -356,9 +401,97 @@ body {
   cursor: pointer;
 }
 
-.results-button:focus-visible {
+.results-button[hidden] {
+  display: none;
+}
+
+.results-button + .results-button {
+  margin-top: 8px;
+}
+
+.results-button-secondary {
+  background: transparent;
+  color: var(--hud-text);
+  box-shadow: inset 0 0 0 2px var(--panel-line);
+}
+
+.garage-money {
+  margin: 0 0 14px;
+  color: var(--hud-accent);
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.garage-upgrades {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.upgrade {
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+
+.upgrade-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.upgrade-name {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.upgrade-pips {
+  color: var(--hud-accent);
+  font-size: 16px;
+  letter-spacing: 0.1em;
+}
+
+.upgrade-effect {
+  margin: 2px 0 10px;
+  color: var(--hud-muted);
+  font-size: 14px;
+}
+
+.upgrade-buy {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--hud-accent);
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.upgrade-buy:disabled {
+  background: var(--disabled);
+  color: var(--hud-muted);
+  cursor: default;
+}
+
+.results-button:focus-visible,
+.upgrade-buy:focus-visible {
   outline: 3px solid var(--hud-text);
   outline-offset: 3px;
+}
+
+/* Between races the HUD and help bar have nothing to show. */
+body.is-idle .hud,
+body.is-idle .help {
+  display: none;
 }
 
 .help {
