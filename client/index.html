@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>RC Racer</title>
   </head>
   <body>
@@ -31,7 +31,7 @@
           <span id="hud-item-icon" class="hud-item-icon" aria-hidden="true">–</span>
           <span class="hud-item-text">
             <span id="hud-item-name" class="hud-item-name">Empty</span>
-            <kbd>X</kbd>
+            <kbd id="hud-item-key">X</kbd>
           </span>
         </div>
       </div>
@@ -76,9 +76,15 @@
         <button id="garage-next" class="results-button" type="button">Next race</button>
       </div>
     </div>
-    <div class="help">
-      <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> or <kbd>WASD</kbd> drive · <kbd>Space</kbd> handbrake ·
-      <kbd>X</kbd> use item · <kbd>R</kbd> reset · <kbd>N</kbd> restart race
+    <div id="toast" class="toast" role="status" hidden></div>
+    <div id="help" class="help">
+      <div data-hint="keyboard">
+        <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> or <kbd>WASD</kbd> drive · <kbd>Space</kbd> handbrake ·
+        <kbd>X</kbd> use item · <kbd>R</kbd> reset · <kbd>N</kbd> restart race
+      </div>
+      <div data-hint="gamepad" hidden>
+        Stick/D-pad steer · RT gas · LT brake · LB/RB drift · B item · Y reset · Back restart
+      </div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

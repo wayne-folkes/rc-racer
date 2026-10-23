@@ -11,7 +11,9 @@ import {
 import './style.css';
 import { speed } from './game/carPhysics';
 import { CarModel } from './game/carModel';
+import { Controls } from './game/controls';
 import { FollowCamera } from './game/followCamera';
+import { GamepadInput } from './game/gamepad';
 import { Keyboard } from './game/input';
 import type { ItemKind } from './game/items';
 import { ItemScene } from './game/itemScene';
@@ -22,6 +24,7 @@ import { loadSeason, saveSeason } from './game/seasonStorage';
 import { TRACKS, type TrackDef } from './game/tracks';
 import { TrackPath, type Projection } from './game/trackPath';
 import { buildTrackScene, disposeScene } from './game/trackScene';
+import { TouchControls } from './game/touch';
 import { createWeather, type WeatherScene } from './game/weatherScene';
 import { RaceWorld, type Racer } from './game/world';
 import { Garage } from './ui/garage';
@@ -34,10 +37,6 @@ const ORDINAL_SUFFIXES = ['th', 'st', 'nd', 'rd'];
 const WRONG_WAY_DOT = -3;
 /** Seconds of wrong-way driving before the WRONG WAY banner shows. */
 const WRONG_WAY_DELAY = 0.6;
-/** Starts the race over from the grid while a race is on. */
-const RESTART_KEY = 'KeyN';
-/** Keys that use the held item. */
-const FIRE_KEYS = ['KeyX', 'ShiftLeft', 'ShiftRight'];
 const ITEM_LABELS: Record<ItemKind, { icon: string; name: string }> = {
   missile: { icon: '🚀', name: 'Missile' },
   bomb: { icon: '💣', name: 'Bomb' },
@@ -109,6 +108,11 @@ let roundBanner = '';
 
 const followCamera = new FollowCamera();
 const keyboard = new Keyboard();
+const gamepad = new GamepadInput();
+const touch = new TouchControls();
+const controls = new Controls([keyboard, gamepad, touch]);
+// Until a key or button is used, a touch device gets the on-screen hints (none) rather than keyboard ones.
+if (touch.touchDevice) controls.lastUsed = 'touch';
 let wrongWayTime = 0;
 let timedBanner: TimedBanner | null = null;
 let shownBannerKey = '';
@@ -154,6 +158,7 @@ const results = {
   secondary: document.getElementById('results-secondary') as HTMLButtonElement,
 };
 
+const garageCard = document.getElementById('garage')!;
 const garage = new Garage(season, {
   buy: (kind) => {
     season.buy(kind);
@@ -262,7 +267,7 @@ function resetCar(): void {
 
 function fixedUpdate(dt: number): void {
   if (!live) return;
-  handleRaceEvents(world.step(dt, keyboard.carInput()));
+  handleRaceEvents(world.step(dt, controls.carInput()));
   updateWrongWay(dt, world.playerProj);
 }
 
@@ -522,21 +527,98 @@ function showEndCard(raced: boolean): void {
   results.root.hidden = false;
 }
 
-/** The button Enter presses: the garage's next race, or the results card's primary button. */
-function enterButton(): HTMLButtonElement | null {
-  if (garage.open) return garage.next;
-  if (!results.root.hidden) return results.primary;
-  return null;
+/** The menu card on screen, if one is open: the garage, or the results card. */
+function menuCard(): HTMLElement | null {
+  if (garage.open) return garageCard;
+  return results.root.hidden ? null : results.root;
 }
 
-// Enter presses the open card's main button. Preventing the default stops a focused button firing twice.
+/** The card's main button: the garage's next race, or the results card's primary button. */
+function primaryButton(): HTMLButtonElement | null {
+  if (garage.open) return garage.next;
+  return results.root.hidden ? null : results.primary;
+}
+
+/** Takes the menu focus ring off every button. */
+function clearMenuFocus(): void {
+  for (const el of document.querySelectorAll('.is-menu-focus')) el.classList.remove('is-menu-focus');
+}
+
+/** Moves the focus ring to a button. Gamepad and touch players don't trigger focus-visible, so it's marked too. */
+function focusMenuButton(button: HTMLButtonElement): void {
+  clearMenuFocus();
+  button.classList.add('is-menu-focus');
+  button.focus();
+}
+
+/**
+ * Arrows, d-pad or stick move focus round the open card. Confirm (Enter, or the gamepad's A) presses
+ * the focused button, or the primary one if nothing is focused. Each press is read once per frame,
+ * so Enter can't fire twice (which would spend two continues or skip a round).
+ */
+function handleMenuInput(): void {
+  const card = menuCard();
+  const primary = primaryButton();
+  if (!card || !primary) {
+    clearMenuFocus();
+    return;
+  }
+  const buttons = [...card.querySelectorAll<HTMLButtonElement>('button')].filter((b) => !b.hidden && !b.disabled);
+  if (buttons.length === 0) return;
+
+  const forward = controls.pressed('down') || controls.pressed('right');
+  const back = controls.pressed('up') || controls.pressed('left');
+  if (forward !== back) {
+    const focused = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    const from = focused === -1 ? Math.max(0, buttons.indexOf(primary)) : focused;
+    const step = forward ? 1 : -1;
+    focusMenuButton(buttons[(from + step + buttons.length) % buttons.length]);
+  }
+  if (controls.pressed('confirm')) {
+    const focused = buttons.find((b) => b === document.activeElement);
+    (focused ?? primary).click();
+  }
+}
+
+// Enter is read through the controls in the frame loop. Stopping its default keeps a focused button
+// from also clicking itself on the same press.
 window.addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter' || e.repeat) return;
-  const button = enterButton();
-  if (!button) return;
-  e.preventDefault();
-  button.click();
+  if (e.key === 'Enter' && menuCard()) e.preventDefault();
 });
+
+/** Shows the button hints for whichever device was used last. Touch players get on-screen buttons instead. */
+const help = document.getElementById('help')!;
+const itemKey = document.getElementById('hud-item-key')!;
+let shownDevice = '';
+function updateHints(): void {
+  const device = controls.lastUsed;
+  if (device === shownDevice) return;
+  shownDevice = device;
+  help.hidden = device === 'touch';
+  for (const hint of help.querySelectorAll<HTMLElement>('[data-hint]')) {
+    hint.hidden = hint.dataset.hint !== device;
+  }
+  itemKey.hidden = device === 'touch';
+  itemKey.textContent = device === 'gamepad' ? 'B' : 'X';
+}
+
+const toast = document.getElementById('toast')!;
+let toastTimer = 0;
+let padWasConnected = false;
+function showToast(text: string, ms: number): void {
+  toast.textContent = text;
+  toast.hidden = false;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    toast.hidden = true;
+  }, ms);
+}
+
+/** Says so when a controller is plugged in (or switched on) while the game is open. */
+function updateConnectToast(): void {
+  if (gamepad.connected && !padWasConnected) showToast('🎮 Controller connected', 2000);
+  padWasConnected = gamepad.connected;
+}
 
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -568,15 +650,19 @@ function frame(now: number): void {
   const dt = Math.min(MAX_FRAME, (now - last) / 1000);
   last = now;
 
-  if (live && keyboard.wasPressed('KeyR') && world.race.phase === 'racing') resetCar();
-  // N starts the race again on the same track without spending a continue. Only while a race is on.
+  controls.poll();
+  updateHints();
+  updateConnectToast();
+  // The touch buttons would sit on top of the menu cards, so they only show during a race.
+  touch.setVisible(!menuCard());
+  handleMenuInput();
+  if (live && controls.pressed('reset') && world.race.phase === 'racing') resetCar();
+  // Restarting starts the race again on the same track without spending a continue. Only while a race is on.
   // Once over the line the result stands, so a 4th place can't be dodged by restarting.
   const canRestart = season.state.status === 'racing' && world.race.phase !== 'finished';
-  if (canRestart && keyboard.wasPressed(RESTART_KEY)) startRace();
-  if (live && world.race.phase === 'racing' && FIRE_KEYS.some((code) => keyboard.wasPressed(code))) {
-    world.useItem(0);
-  }
-  keyboard.endFrame();
+  if (canRestart && controls.pressed('restart')) startRace();
+  if (live && world.race.phase === 'racing' && controls.pressed('fire')) world.useItem(0);
+  controls.endFrame();
 
   accumulator += dt;
   while (accumulator >= STEP) {
@@ -587,7 +673,10 @@ function frame(now: number): void {
   tickTimedBanner(dt);
   updateBanner();
   itemScene.update(dt);
-  itemScene.handleEvents(world.items.drainEvents());
+  const itemEvents = world.items.drainEvents();
+  // Being hit buzzes the controller, if it can.
+  if (itemEvents.some((event) => event.type === 'explode' && event.victim === 0)) gamepad.rumble(0.8, 250);
+  itemScene.handleEvents(itemEvents);
   // Ambient, so it keeps moving behind the garage and results cards too.
   weather?.update(dt, world.player.x, world.player.z);
   // carViews are in the same order as world.racers, so index i matches world.items.status[i].

@@ -12,11 +12,18 @@
   --panel-soft: rgb(255 255 255 / 0.06);
   --panel-line: rgb(255 255 255 / 0.25);
   --disabled: rgb(255 255 255 / 0.12);
+  --touch-bg: rgb(15 23 42 / 0.55);
+  --touch-pressed: rgb(250 204 21 / 0.4);
   --font: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Elements with their own display rule (kbd, the touch overlay) still respect the hidden attribute. */
+[hidden] {
+  display: none !important;
 }
 
 html,
@@ -38,7 +45,9 @@ body {
 
 .hud {
   position: fixed;
-  inset: 16px 16px auto;
+  /* The safe-area insets keep the panels clear of the notch and rounded corners on phones. */
+  inset: calc(16px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) auto
+    calc(16px + env(safe-area-inset-left));
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -223,7 +232,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   background: rgb(15 23 42 / 0.45);
 }
 
@@ -483,7 +493,9 @@ body {
 }
 
 .results-button:focus-visible,
-.upgrade-buy:focus-visible {
+.upgrade-buy:focus-visible,
+.results-button.is-menu-focus,
+.upgrade-buy.is-menu-focus {
   outline: 3px solid var(--hud-text);
   outline-offset: 3px;
 }
@@ -497,7 +509,7 @@ body.is-idle .help {
 .help {
   position: fixed;
   left: 50%;
-  bottom: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   width: max-content;
   max-width: calc(100% - 32px);
@@ -509,6 +521,183 @@ body.is-idle .help {
   text-align: center;
   color: var(--hud-muted);
   pointer-events: none;
+}
+
+/* Shown above the touch controls, for a moment, when a controller connects. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 120px;
+  z-index: 10;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: var(--hud-bg);
+  color: var(--hud-text);
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/*
+ * On-screen controls for touch screens. The overlay covers the bottom of the view but only its
+ * buttons take touches, so the car stays visible and the canvas underneath never scrolls.
+ */
+.touch-controls {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.touch-steer,
+.touch-btn,
+.touch-mini {
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-steer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 140px;
+  height: 92px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--touch-bg);
+  color: var(--hud-text);
+  box-shadow: inset 0 0 0 2px var(--panel-line);
+}
+
+.touch-half {
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.touch-half + .touch-half {
+  box-shadow: inset 2px 0 0 var(--panel-line);
+}
+
+.touch-half.is-pressed {
+  background: var(--touch-pressed);
+}
+
+.touch-right {
+  display: grid;
+  grid-template-columns: 72px 104px;
+  grid-template-rows: 60px 92px;
+  gap: 8px;
+}
+
+.touch-btn {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 18px;
+  background: var(--touch-bg);
+  color: var(--hud-text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  box-shadow: inset 0 0 0 2px var(--panel-line);
+}
+
+.touch-btn.is-pressed {
+  background: var(--touch-pressed);
+  transform: scale(0.96);
+}
+
+.touch-item {
+  align-self: center;
+  justify-self: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+}
+
+.touch-drift {
+  height: 60px;
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.touch-brake {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.touch-gas {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 18px;
+}
+
+/* Reset and restart sit under the item slot in the top-right corner, small so they're not hit by accident. */
+.touch-utility {
+  position: fixed;
+  top: 150px;
+  right: max(16px, env(safe-area-inset-right));
+  display: flex;
+  gap: 6px;
+}
+
+.touch-mini {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--touch-bg);
+  color: var(--hud-text);
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  box-shadow: inset 0 0 0 2px var(--panel-line);
+}
+
+.touch-mini.is-pressed {
+  background: var(--touch-pressed);
+  transform: scale(0.96);
+}
+
+/* Short landscape screens (phones on their side) get smaller controls, so they leave the car visible. */
+@media (max-height: 500px) {
+  .touch-steer {
+    width: 124px;
+    height: 72px;
+  }
+
+  .touch-right {
+    grid-template-columns: 64px 96px;
+    grid-template-rows: 48px 72px;
+  }
+
+  .touch-item {
+    width: 48px;
+    height: 48px;
+  }
+
+  .touch-drift {
+    height: 48px;
+  }
 }
 
 kbd {
