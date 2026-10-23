@@ -18,8 +18,9 @@ export function loadSeason(): SeasonState | null {
       Number.isInteger(s.continuesLeft) &&
       Array.isArray(s.results) &&
       STATUSES.has(s.status as string) &&
-      // Seasons saved before vehicles existed have none, and take the default.
+      // Seasons saved before vehicles or easy mode existed lack these, and take the defaults.
       (s.vehicle === undefined || isVehicleId(s.vehicle)) &&
+      (s.easy === undefined || typeof s.easy === 'boolean') &&
       UPGRADE_KINDS.every((k) => Number.isInteger(s.levels?.[k]));
     return valid ? { ...newSeasonState(), ...s } : null;
   } catch {

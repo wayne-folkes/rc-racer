@@ -18,7 +18,8 @@ npm run dev
 The game opens on a title screen with Continue, New season, Records, Settings (sound, volume, reset
 progress) and How to play. New season asks you to pick a Buggy or a Monster Truck, and everyone on
 the track drives the same one. The buggy is quicker and sharper; the truck is a few percent slower
-and softer to steer, but its big tires shrug off oil and puddles.
+and softer to steer, but its big tires shrug off oil and puddles. Easy mode, a switch on the same
+screen, starts you 2nd (instead of 4th) and makes the opponents a little slower.
 
 `npm test` runs the unit tests (handling, track maths, collisions, race rules, AI, items, season
 rules, and full four-car races on every track). `npm run build` type-checks and builds to `client/dist`.

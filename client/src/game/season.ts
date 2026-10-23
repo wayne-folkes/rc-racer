@@ -28,6 +28,8 @@ export const CONTINUES = 2;
  * are needed to keep up. */
 const FIRST_ROUND_PACE = 0.9;
 const PACE_PER_ROUND = 0.05;
+/** Easy mode takes this off the opponents' pace every round. */
+const EASY_PACE_DROP = 0.06;
 
 /** Per-level handling gains. */
 const ENGINE_SPEED = 0.05;
@@ -50,17 +52,20 @@ export interface SeasonState {
   money: number;
   /** What the player drives all season. */
   vehicle: VehicleId;
+  /** Easy mode: the player starts 2nd and the opponents are a little slower. */
+  easy: boolean;
   levels: Record<UpgradeKind, number>;
   continuesLeft: number;
   results: RaceResult[];
   status: SeasonStatus;
 }
 
-export function newSeasonState(vehicle: VehicleId = DEFAULT_VEHICLE): SeasonState {
+export function newSeasonState(vehicle: VehicleId = DEFAULT_VEHICLE, easy = false): SeasonState {
   return {
     round: 0,
     money: 0,
     vehicle,
+    easy,
     levels: { engine: 0, tires: 0, battery: 0 },
     continuesLeft: CONTINUES,
     results: [],
@@ -105,7 +110,7 @@ export class Season {
 
   /** Multiplier on opponents' pace for the current round. */
   get opponentPace(): number {
-    return FIRST_ROUND_PACE + PACE_PER_ROUND * this.state.round;
+    return FIRST_ROUND_PACE + PACE_PER_ROUND * this.state.round - (this.state.easy ? EASY_PACE_DROP : 0);
   }
 
   get playerTuning(): CarTuning {
@@ -162,8 +167,8 @@ export class Season {
     return true;
   }
 
-  /** Starts a fresh season from the first track, in the chosen vehicle. */
-  restart(vehicle: VehicleId = DEFAULT_VEHICLE): void {
-    this.state = newSeasonState(vehicle);
+  /** Starts a fresh season from the first track, in the chosen vehicle and mode. */
+  restart(vehicle: VehicleId = DEFAULT_VEHICLE, easy = false): void {
+    this.state = newSeasonState(vehicle, easy);
   }
 }
