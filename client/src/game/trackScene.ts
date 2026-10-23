@@ -19,6 +19,7 @@ import {
   Texture,
 } from 'three';
 import { seededRandom } from './items';
+import { gridPosition, OPPONENTS, PLAYER, SLOT_LENGTH, SLOT_WIDTH } from './racers';
 import type { Point, TrackPath } from './trackPath';
 import type { TrackTheme } from './tracks';
 
@@ -59,6 +60,7 @@ export function buildTrackScene(track: TrackPath, theme: TrackTheme): Group {
   group.add(wall(track, hw, hw + WALL_THICKNESS, wallMat));
 
   group.add(startLine(track));
+  group.add(gridSlots(track));
   group.add(scenery(track, theme));
   return group;
 }
@@ -172,6 +174,60 @@ function startLine(track: TrackPath) {
   mesh.position.set(p.x, 0.03, p.z);
   mesh.receiveShadow = true;
   return mesh;
+}
+
+/** Pale diagonal hatching inside a solid border, translucent so it shows on every theme's dark road. */
+function slotTexture(): CanvasTexture {
+  // Pixels per metre are the same both ways, so the hatching stays at 45 degrees on the road.
+  const w = 128;
+  const h = Math.round((w * SLOT_WIDTH) / SLOT_LENGTH);
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = 'rgba(235, 240, 250, 0.12)';
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(235, 240, 250, 0.45)';
+  ctx.lineWidth = 8;
+  for (let d = -h; d < w; d += 20) {
+    ctx.beginPath();
+    ctx.moveTo(d, h);
+    ctx.lineTo(d + h, 0);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(235, 240, 250, 0.85)';
+  ctx.lineWidth = 10;
+  ctx.strokeRect(5, 5, w - 10, h - 10);
+  return new CanvasTexture(canvas);
+}
+
+/**
+ * The hatched pad each car starts on, like RC Pro-Am's grid. Each sits where gridPosition() puts its car,
+ * so the pads and the cars can't drift apart.
+ */
+function gridSlots(track: TrackPath): Group {
+  const group = new Group();
+  const geometry = new PlaneGeometry(SLOT_LENGTH, SLOT_WIDTH);
+  const material = new MeshStandardMaterial({
+    map: slotTexture(),
+    transparent: true,
+    roughness: 0.95,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+  for (const racer of [PLAYER, ...OPPONENTS]) {
+    const { x, z, heading } = gridPosition(track, racer.gridSlot);
+    const pad = new Mesh(geometry, material);
+    // Flat on the road, with the pad's length along the direction of travel (as the start line does).
+    pad.rotation.x = -Math.PI / 2;
+    pad.rotation.z = -heading;
+    pad.position.set(x, 0.02, z);
+    pad.receiveShadow = true;
+    group.add(pad);
+  }
+  return group;
 }
 
 /** The theme's scenery, plus ponds if the theme has them. Deterministic, so a track looks the same every load. */

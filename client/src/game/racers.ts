@@ -27,6 +27,9 @@ const GRID_FRONT = 5;
 const GRID_ROW_GAP = 3.5;
 /** Grid slots alternate left and right of the centreline by this much. */
 const GRID_SIDE = 2;
+/** The painted pad each car starts on: a little bigger than a car, along and across the road. */
+export const SLOT_LENGTH = 3;
+export const SLOT_WIDTH = 2.2;
 
 /** A car on the starting grid, staggered two abreast behind the line. */
 export function gridPosition(track: TrackPath, slot: number): CarState {
