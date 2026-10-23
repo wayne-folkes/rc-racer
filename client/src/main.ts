@@ -893,9 +893,10 @@ function handleMenuInput(): void {
     clearMenuFocus();
     return;
   }
-  // The buttons and sliders that are showing, in order. Anything inside a hidden block is skipped.
-  const items = [...card.querySelectorAll<HTMLButtonElement | HTMLInputElement>('button, input[type="range"]')].filter(
-    (el) => !el.disabled && !el.closest('[hidden]'),
+  // The buttons, links and sliders that are showing, in order. Anything inside a hidden block is skipped.
+  // (A link has no `disabled`, so it always passes that check.)
+  const items = [...card.querySelectorAll<HTMLElement>('button, a[href], input[type="range"]')].filter(
+    (el) => !(el as HTMLButtonElement | HTMLInputElement).disabled && !el.closest('[hidden]'),
   );
   if (items.length === 0) return;
 
