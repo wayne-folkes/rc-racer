@@ -16,10 +16,11 @@ import {
   RepeatWrapping,
   Shape,
   ShapeGeometry,
+  Sprite,
   Texture,
 } from 'three';
 import { seededRandom } from './items';
-import { gridPosition, OPPONENTS, PLAYER, SLOT_LENGTH, SLOT_WIDTH } from './racers';
+import { gridPosition, OPPONENTS, PLAYER, SLOT_LENGTH, SLOT_WIDTH, START_LINE_DEPTH } from './racers';
 import type { Point, TrackPath } from './trackPath';
 import type { TrackTheme } from './tracks';
 
@@ -68,15 +69,22 @@ export function buildTrackScene(track: TrackPath, theme: TrackTheme): Group {
 /** Frees the geometries, materials and textures under an object. Call it before dropping a scene. */
 export function disposeScene(root: Object3D): void {
   root.traverse((object) => {
+    // Every sprite shares one geometry, so only a sprite's material and texture are its own to free.
+    if (object instanceof Sprite) {
+      disposeMaterial(object.material);
+      return;
+    }
     if (!(object instanceof Mesh)) return;
     object.geometry.dispose();
-    for (const material of [object.material].flat() as Material[]) {
-      for (const value of Object.values(material)) {
-        if (value instanceof Texture) value.dispose();
-      }
-      material.dispose();
-    }
+    for (const material of [object.material].flat() as Material[]) disposeMaterial(material);
   });
+}
+
+function disposeMaterial(material: Material): void {
+  for (const value of Object.values(material)) {
+    if (value instanceof Texture) value.dispose();
+  }
+  material.dispose();
 }
 
 function offsetPoint(track: TrackPath, i: number, offset: number) {
@@ -147,11 +155,13 @@ function wall(track: TrackPath, from: number, to: number, mat: MeshStandardMater
 }
 
 function startLine(track: TrackPath) {
+  // Squares are 0.7 m along the road, so a deeper block just has more of them.
+  const columns = Math.round(START_LINE_DEPTH / 0.7);
   const canvas = document.createElement('canvas');
-  canvas.width = 2;
+  canvas.width = columns;
   canvas.height = 8;
   const ctx = canvas.getContext('2d')!;
-  for (let x = 0; x < 2; x++) {
+  for (let x = 0; x < columns; x++) {
     for (let y = 0; y < 8; y++) {
       ctx.fillStyle = (x + y) % 2 === 0 ? '#ffffff' : '#111111';
       ctx.fillRect(x, y, 1, 1);
@@ -159,12 +169,12 @@ function startLine(track: TrackPath) {
   }
   const tex = new CanvasTexture(canvas);
   tex.magFilter = NearestFilter;
-  // Two squares along the direction of travel, repeating across the road.
+  // Several squares along the direction of travel, repeating across the road.
   tex.wrapT = RepeatWrapping;
   tex.repeat.set(1, track.halfWidth / 4);
 
   const mesh = new Mesh(
-    new PlaneGeometry(1.4, track.halfWidth * 2),
+    new PlaneGeometry(START_LINE_DEPTH, track.halfWidth * 2),
     new MeshStandardMaterial({ map: tex, roughness: 0.9 }),
   );
   const p = track.points[0];

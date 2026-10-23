@@ -1,6 +1,7 @@
 import { formatTime } from '../game/race';
 import { loadRecords } from '../game/records';
 import { TRACKS } from '../game/tracks';
+import { VEHICLE_IDS, VEHICLES, type VehicleId } from '../game/vehicles';
 import { BackCard, byId, type MenuCard } from './card';
 
 // The title screen, and the Records panel it opens. Records are read from storage each time the
@@ -73,17 +74,40 @@ export class TitleCard implements MenuCard {
   }
 }
 
-/** One row per track: the best race and best lap, or a dash where there's no time yet. */
+/**
+ * One row per track: the best race and best lap in the chosen vehicle, or a dash where there's no
+ * time yet. A button per vehicle switches between them.
+ */
 export class RecordsCard extends BackCard {
   private readonly list = byId('records-list');
+  private readonly tabs = new Map<VehicleId, HTMLButtonElement>();
 
-  constructor(onBack: () => void) {
+  constructor(
+    onBack: () => void,
+    /** The vehicle being driven this season, which the card opens on. */
+    private readonly currentVehicle: () => VehicleId,
+  ) {
     super('records', 'records-back', onBack);
+    const tabs = byId('records-tabs');
+    for (const id of VEHICLE_IDS) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'records-tab';
+      button.textContent = VEHICLES[id].name;
+      button.addEventListener('click', () => this.show(id));
+      tabs.append(button);
+      this.tabs.set(id, button);
+    }
   }
 
   refresh(): void {
+    this.show(this.currentVehicle());
+  }
+
+  private show(vehicle: VehicleId): void {
+    for (const [id, button] of this.tabs) button.setAttribute('aria-pressed', String(id === vehicle));
     const rows = TRACKS.map((def) => {
-      const { bestRace, bestLap } = loadRecords(def.id);
+      const { bestRace, bestLap } = loadRecords(vehicle, def.id);
       return recordRow(def.name, bestRace === null ? '—' : formatTime(bestRace), bestLap === null ? '—' : formatTime(bestLap));
     });
     this.list.replaceChildren(recordRow('Track', 'Race', 'Lap', true), ...rows);

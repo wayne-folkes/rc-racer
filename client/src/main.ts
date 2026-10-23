@@ -6,6 +6,7 @@ import {
   HemisphereLight,
   PCFSoftShadowMap,
   Scene,
+  type Sprite,
   WebGLRenderer,
 } from 'three';
 import { inject } from '@vercel/analytics';
@@ -27,6 +28,7 @@ import { loadSeason, saveSeason } from './game/seasonStorage';
 import { TRACKS, type TrackDef } from './game/tracks';
 import { TrackPath, type Projection } from './game/trackPath';
 import { buildTrackScene, disposeScene } from './game/trackScene';
+import { buildGridLabel } from './game/gridLabel';
 import { TouchControls } from './game/touch';
 import type { VehicleId } from './game/vehicles';
 import { createWeather, type WeatherScene } from './game/weatherScene';
@@ -127,6 +129,8 @@ let weather: WeatherScene | null = null;
 let trackScene: Group | null = null;
 let rampScene: Group | null = null;
 let carViews: CarView[] = [];
+/** The "4TH" over the player's car on the grid. It lives under that car's model, so it's freed with it. */
+let gridLabel: Sprite | null = null;
 /** False while the garage or a summary card is up: the scene is built but nothing moves. */
 let live = true;
 /** True during the title screen's attract demo: the AI drives every car and nothing is recorded. */
@@ -221,7 +225,7 @@ const titleCard = new TitleCard(titleInfo, {
   settings: () => openSettings(true),
   howToPlay: () => pushCard(howtoCard),
 });
-const recordsCard = new RecordsCard(popCard);
+const recordsCard = new RecordsCard(popCard, () => season.state.vehicle);
 const howtoCard = new BackCard('howto', 'howto-back', popCard);
 const settingsCard = new SettingsCard(sound, {
   back: popCard,
@@ -256,6 +260,7 @@ function clearRace(): void {
     weather = null;
   }
   carViews = [];
+  gridLabel = null;
   trackScene = null;
 }
 
@@ -291,6 +296,10 @@ function buildRace(def: TrackDef, mode: BuildMode): void {
     scene.add(model.root);
     return { racer, model };
   });
+  // The place is the grid slot, not race.position(): before the first frame every car is level at zero
+  // progress, which would read as 1st.
+  gridLabel = buildGridLabel(ordinal(world.racers[0].info.gridSlot + 1));
+  carViews[0].model.root.add(gridLabel);
   weather = createWeather(def.theme.weather, raceCount);
   if (weather) scene.add(weather.root);
   scene.background = new Color(def.theme.sky);
@@ -704,7 +713,12 @@ function updateStandings(): void {
 function showResults(): void {
   const raceTime = world.race.finishTime ?? world.race.clock;
   const bestLap = world.race.player.bestLap;
-  const { previous, records, newRaceRecord, newLapRecord } = updateRecords(season.track.id, raceTime, bestLap);
+  const { previous, records, newRaceRecord, newLapRecord } = updateRecords(
+    season.state.vehicle,
+    season.track.id,
+    raceTime,
+    bestLap,
+  );
 
   season.finishRace(world.race.position(0), raceTime);
   persist();
@@ -1026,6 +1040,8 @@ function frame(now: number): void {
   updateEngines();
   // Ambient, so it keeps moving behind the garage and results cards too.
   weather?.update(simDt, world.player.x, world.player.z);
+  // The grid label stays up until the lights go out, in a race you're driving.
+  if (gridLabel) gridLabel.visible = live && !demo && world.race.phase === 'countdown';
   // carViews are in the same order as world.racers, so index i matches world.items.status[i].
   carViews.forEach(({ racer, model }, i) => {
     model.setBoosting(world.items.status[i].boost > 0);
