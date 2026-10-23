@@ -3,6 +3,10 @@
 A browser racing game in the spirit of RC Pro-Am: low-poly RC cars on a track seen from a fixed
 3/4 camera. TypeScript + Vite + Three.js, no backend yet.
 
+![RC Racer: four cars on Meadow Loop, with the lap timer, race position, speed and item slot](docs/screenshot.png)
+
+**Play it at [racer.folkes.dev](https://racer.folkes.dev)**, or run it yourself below.
+
 ## Run it
 
 ```bash
@@ -11,18 +15,53 @@ npm install
 npm run dev
 ```
 
-Arrow keys or WASD to drive, Space for the handbrake (slide), X or Shift to use an item, R to reset
-onto the track, N to restart the race (or Enter on the results screen), Esc or P to pause, M to mute
-(or the speaker button under your race position). The game opens on a title screen with Continue,
-New season, Records, Settings (sound, volume, reset progress) and How to play.
-
-A gamepad works too (standard layout: Xbox, PlayStation and most others): left stick or d-pad to
-steer, RT/A for gas, LT/X to brake, LB/RB for the handbrake, B to use an item, Y to reset, Back to
-restart, Start to pause; the d-pad and A move around the menus. On touch screens, on-screen steering, pedals and
-item buttons appear.
+The game opens on a title screen with Continue, New season, Records, Settings (sound, volume, reset
+progress) and How to play.
 
 `npm test` runs the unit tests (handling, track maths, collisions, race rules, AI, items, season
 rules, and full four-car races on every track). `npm run build` type-checks and builds to `client/dist`.
+
+## Controls
+
+Keyboard, gamepad and touch all work, and you can switch between them mid-race.
+
+### Keyboard
+
+| Action | Keys |
+|---|---|
+| Gas / brake and reverse | Up / Down, or W / S |
+| Steer | Left / Right, or A / D |
+| Handbrake (slide) | Space |
+| Use item | X or Shift |
+| Reset onto the track | R |
+| Restart race | N (or Enter on the results screen) |
+| Pause | Esc or P |
+| Mute | M (or the speaker button under your race position) |
+| Menus | Arrow keys to move, Enter to select |
+
+### Gamepad
+
+Any controller with the browser's "standard" layout works, which covers Xbox, PlayStation and most
+others. It rumbles when you're hit.
+
+![Gamepad diagram: left stick and d-pad steer, RT or A for gas, LT or X to brake, either bumper for the handbrake, B to use an item, Y to reset, Back to restart, Start to pause](docs/controller.svg)
+
+| Action | Xbox | PlayStation |
+|---|---|---|
+| Steer | Left stick or d-pad left / right | Left stick or d-pad left / right |
+| Gas | RT or A | R2 or ✕ |
+| Brake / reverse | LT or X | L2 or □ |
+| Handbrake (slide) | LB or RB | L1 or R1 |
+| Use item | B | ○ |
+| Reset onto the track | Y | △ |
+| Restart race | Back | Share / Create |
+| Pause | Start | Options |
+| Menus | D-pad or left stick to move, A to select | D-pad or left stick to move, ✕ to select |
+
+### Touch
+
+On touch screens an on-screen steering pad sits under your left thumb, with gas, brake, drift and
+item buttons under your right, and small reset and pause buttons in the top-right corner.
 
 ## Deploy
 
