@@ -12,7 +12,8 @@ npm run dev
 ```
 
 Arrow keys or WASD to drive, Space for the handbrake (slide), X or Shift to use an item, R to reset
-onto the track, N to restart the race (or Enter on the results screen).
+onto the track, N to restart the race (or Enter on the results screen), M to mute (or the speaker
+button under your race position).
 
 A gamepad works too (standard layout: Xbox, PlayStation and most others): left stick or d-pad to
 steer, RT/A for gas, LT/X to brake, LB/RB for the handbrake, B to use an item, Y to reset, Back to
@@ -43,6 +44,8 @@ which builds `client/` as a static site (`vercel.json`). Pull requests get previ
   round, top three or game over) and saving progress in the browser.
 - `client/src/game/controls.ts`, `input.ts`, `gamepad.ts`, `touch.ts`: keyboard, gamepad and touch input,
   merged into one set of controls.
+- `client/src/game/audio.ts`: engine notes and sound effects, synthesized with the Web Audio API (no
+  sound files).
 - `client/src/game/carModel.ts`, `trackScene.ts`, `itemScene.ts`, `weatherScene.ts`, `followCamera.ts`:
   visuals.
 
@@ -53,4 +56,4 @@ which builds `client/` as a static site (`vercel.json`). Pull requests get previ
 3. AI opponents following the racing line, race positions. **(done)**
 4. Pickups and weapons (missiles, bombs), boost pads, oil slicks and puddles. **(done)**
 5. Progression: several tracks, upgrades between races, top-3-or-game-over. **(done)**
-6. Polish: sound, menus, gamepad and touch controls **(done)**, ramps and jumps, track editor.
+6. Polish: sound and gamepad and touch controls **(done)**, menus, ramps and jumps, track editor.

@@ -72,6 +72,25 @@ body {
   align-items: flex-end;
 }
 
+/* The HUD ignores the pointer so taps reach the game; the mute button opts back in. */
+.hud-mute {
+  pointer-events: auto;
+  align-self: flex-start;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  font-size: 20px;
+  line-height: 44px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.hud-mute:focus-visible {
+  outline: 2px solid var(--hud-accent);
+  outline-offset: 2px;
+}
+
 .hud-position {
   display: flex;
   align-items: baseline;

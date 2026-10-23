@@ -9,7 +9,8 @@ import {
   WebGLRenderer,
 } from 'three';
 import './style.css';
-import { speed } from './game/carPhysics';
+import { distanceVolume, engineNote, Sound, type SoundName } from './game/audio';
+import { DEFAULT_TUNING, speed } from './game/carPhysics';
 import { CarModel } from './game/carModel';
 import { Controls } from './game/controls';
 import { FollowCamera } from './game/followCamera';
@@ -111,6 +112,9 @@ const keyboard = new Keyboard();
 const gamepad = new GamepadInput();
 const touch = new TouchControls();
 const controls = new Controls([keyboard, gamepad, touch]);
+const sound = new Sound();
+/** The countdown number last beeped for, so each one beeps once. */
+let lastBeep = 0;
 // Until a key or button is used, a touch device gets the on-screen hints (none) rather than keyboard ones.
 if (touch.touchDevice) controls.lastUsed = 'touch';
 let wrongWayTime = 0;
@@ -222,6 +226,7 @@ function buildRace(def: TrackDef, playing: boolean): void {
   const number = season.tracks.indexOf(def) + 1;
   roundHud = `Round ${number}/${season.tracks.length} · ${def.name}`;
   roundBanner = `Round ${number} · ${def.name}`;
+  lastBeep = 0;
   hud.round.textContent = roundHud;
   hud.positionTotal.textContent = `/ ${world.racers.length}`;
 
@@ -289,7 +294,78 @@ function handleRaceEvents(events: RaceEvent[]): void {
     if (event === 'finalLap') showTimedBanner({ text: 'FINAL LAP', tone: 'accent' }, 1.5);
     if (event === 'finish') showTimedBanner({ text: 'FINISH!', tone: 'white' }, 1.5, showResults);
   }
+  // The final lap also reports a plain lap; play only its own jingle.
+  if (events.includes('go')) sound.play('go');
+  if (events.includes('finish')) sound.play('finish');
+  else if (events.includes('finalLap')) sound.play('finalLap');
+  else if (events.includes('lap')) sound.play('lap');
 }
+
+const ITEM_SOUNDS: Partial<Record<string, SoundName>> = {
+  pickup: 'pickup',
+  boost: 'boost',
+  explode: 'explode',
+  fire: 'fire',
+  drop: 'drop',
+  splash: 'splash',
+  slick: 'skid',
+};
+
+/** Plays item sounds, quieter the further from the player they happen. */
+function playItemSounds(events: ReturnType<typeof world.items.drainEvents>): void {
+  for (const e of events) {
+    const name = ITEM_SOUNDS[e.type];
+    if (!name) continue;
+    const distance = Math.hypot(e.x - world.player.x, e.z - world.player.z);
+    sound.play(name, distanceVolume(distance));
+  }
+}
+
+/** Beeps for 3, 2, 1 (GO comes with the race's own 'go' event). */
+function updateCountdownBeeps(): void {
+  if (!live || world.race.phase !== 'countdown') return;
+  const n = Math.ceil(world.race.countdown);
+  if (n !== lastBeep && n <= 3) sound.play('beep');
+  lastBeep = n;
+}
+
+/** The player's engine, plus the nearest opponent's, fading with distance. Silent in menus. */
+function updateEngines(): void {
+  if (!live || menuCard()) {
+    sound.silenceEngines();
+    return;
+  }
+  const me = world.player;
+  // Lets the player rev on the grid during the countdown.
+  const mine = engineNote(speed(me), controls.carInput().throttle, DEFAULT_TUNING.maxSpeed);
+  sound.engine('player', mine.freq, mine.gain);
+
+  let nearest: Racer | null = null;
+  let nearestDistance = Infinity;
+  for (const racer of world.racers.slice(1)) {
+    const d = Math.hypot(racer.car.x - me.x, racer.car.z - me.z);
+    if (d < nearestDistance) {
+      nearest = racer;
+      nearestDistance = d;
+    }
+  }
+  if (!nearest) return;
+  const theirs = engineNote(speed(nearest.car), 1, DEFAULT_TUNING.maxSpeed);
+  // Detuned a little from the player's, so the two don't merge into one note.
+  sound.engine('rival', theirs.freq * 1.07, theirs.gain * 0.6 * Math.max(0, 1 - nearestDistance / 40));
+}
+
+const muteButton = document.getElementById('hud-mute')!;
+function showMuted(): void {
+  muteButton.textContent = sound.muted ? '🔇' : '🔊';
+  muteButton.setAttribute('aria-label', sound.muted ? 'Unmute sound' : 'Mute sound');
+  muteButton.setAttribute('aria-pressed', String(sound.muted));
+}
+muteButton.addEventListener('click', () => {
+  sound.toggleMuted();
+  showMuted();
+});
+showMuted();
 
 function showTimedBanner(message: Banner, seconds: number, onDone?: () => void): void {
   timedBanner = { ...message, seconds, onDone };
@@ -662,6 +738,13 @@ function frame(now: number): void {
   const canRestart = season.state.status === 'racing' && world.race.phase !== 'finished';
   if (canRestart && controls.pressed('restart')) startRace();
   if (live && world.race.phase === 'racing' && controls.pressed('fire')) world.useItem(0);
+  if (keyboard.wasPressed('KeyM')) {
+    sound.toggleMuted();
+    showMuted();
+  }
+  // Gamepad buttons don't count as the interaction browsers need before audio can start, so
+  // keep asking; it only works once the page has had a click, key press or tap.
+  if (controls.lastUsed === 'gamepad') sound.unlock();
   controls.endFrame();
 
   accumulator += dt;
@@ -677,6 +760,9 @@ function frame(now: number): void {
   // Being hit buzzes the controller, if it can.
   if (itemEvents.some((event) => event.type === 'explode' && event.victim === 0)) gamepad.rumble(0.8, 250);
   itemScene.handleEvents(itemEvents);
+  playItemSounds(itemEvents);
+  updateCountdownBeeps();
+  updateEngines();
   // Ambient, so it keeps moving behind the garage and results cards too.
   weather?.update(dt, world.player.x, world.player.z);
   // carViews are in the same order as world.racers, so index i matches world.items.status[i].
