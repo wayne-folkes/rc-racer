@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Yellow badge; the apple-touch render in render.sh drops the rounded corners -->
+  <rect id="badge" width="64" height="64" rx="14" fill="#facc15"/>
+  <!-- Wheels -->
+  <g fill="#0f172a">
+    <rect x="7" y="11" width="13" height="15" rx="3"/>
+    <rect x="44" y="11" width="13" height="15" rx="3"/>
+    <rect x="7" y="38" width="13" height="15" rx="3"/>
+    <rect x="44" y="38" width="13" height="15" rx="3"/>
+  </g>
+  <!-- Body with a chamfered nose -->
+  <path d="M25 5 H39 L47 13 V51 Q47 58 40 58 H24 Q17 58 17 51 V13 Z" fill="#e63946"/>
+  <!-- White racing stripe -->
+  <rect x="30" y="9" width="4" height="46" fill="#ffffff" opacity="0.85"/>
+  <!-- Cabin -->
+  <path d="M24 21 H40 Q42 21 42.5 23 L44 34 Q44.5 37 41.5 37 H22.5 Q19.5 37 20 34 L21.5 23 Q22 21 24 21 Z" fill="#0f172a"/>
+  <!-- Headlights -->
+  <circle cx="23" cy="11" r="2.5" fill="#fef9c3"/>
+  <circle cx="41" cy="11" r="2.5" fill="#fef9c3"/>
+  <!-- Rear wing -->
+  <rect x="14" y="51" width="36" height="5" rx="2" fill="#0f172a"/>
+</svg>

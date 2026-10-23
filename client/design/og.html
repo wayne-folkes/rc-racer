@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>RC Racer link preview</title>
+    <!-- Source for client/public/og.png (1200x630). Regenerate with design/render.sh. -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: #0f172a;
+      }
+
+      .card {
+        position: relative;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: radial-gradient(ellipse 80% 70% at 50% 25%, #1e293b 0%, #0f172a 72%);
+      }
+
+      .scene {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 1200px;
+        height: 630px;
+      }
+
+      .logo-wrap {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 70px;
+        text-align: center;
+      }
+
+      .logo {
+        display: inline-block;
+        margin: 0;
+        font-family: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "Arial Black", sans-serif;
+        font-size: 176px;
+        font-weight: 900;
+        line-height: 1;
+        letter-spacing: 0.02em;
+        color: #facc15;
+        text-shadow: 7px 8px 0 #020617;
+        white-space: nowrap;
+        transform: skewX(-8deg);
+      }
+
+      .tagline {
+        margin: 22px 0 0;
+        font-family: ui-rounded, "SF Pro Rounded", "Helvetica Neue", Arial, sans-serif;
+        font-size: 38px;
+        font-weight: 800;
+        color: #e2e8f0;
+        text-shadow: 3px 3px 0 #020617;
+      }
+
+      .footer {
+        position: absolute;
+        left: 50%;
+        bottom: 26px;
+        transform: translateX(-50%);
+        padding: 9px 22px;
+        border-radius: 999px;
+        background: rgb(15 23 42 / 0.9);
+        border: 2px solid rgb(250 204 21 / 0.5);
+        font-family: "Helvetica Neue", Arial, sans-serif;
+        font-size: 24px;
+        font-weight: 700;
+        color: #cbd5e1;
+        white-space: nowrap;
+      }
+
+      .footer b {
+        color: #facc15;
+        font-weight: 800;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <svg class="scene" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stop-color="#facc15" stop-opacity="0.22" />
+            <stop offset="1" stop-color="#facc15" stop-opacity="0" />
+          </radialGradient>
+          <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#6fbf5a" />
+            <stop offset="1" stop-color="#3f7a33" />
+          </linearGradient>
+          <pattern id="checks" width="28" height="28" patternUnits="userSpaceOnUse">
+            <rect width="28" height="28" fill="#0f172a" />
+            <rect width="14" height="14" fill="#f8fafc" />
+            <rect x="14" y="14" width="14" height="14" fill="#f8fafc" />
+          </pattern>
+          <!-- Flat-shaded low-poly RC car facing +x. Colour comes from the use element's `color`. -->
+          <g id="car">
+            <ellipse cx="2" cy="4" rx="45" ry="25" fill="#020617" opacity="0.35" />
+            <g fill="#0b1120">
+              <rect x="-29" y="-27" width="20" height="10" rx="3" />
+              <rect x="-29" y="17" width="20" height="10" rx="3" />
+              <rect x="21" y="-27" width="20" height="10" rx="3" />
+              <rect x="21" y="17" width="20" height="10" rx="3" />
+            </g>
+            <path d="M-40 -14 L28 -15 L42 -5 L42 5 L28 15 L-40 14 Z" fill="currentColor" />
+            <path d="M-36 -11 L26 -11 L37 -3 L37 3 L26 11 L-36 11 Z" fill="#ffffff" opacity="0.22" />
+            <rect x="-36" y="-1.5" width="62" height="3" fill="#ffffff" opacity="0.6" />
+            <path d="M-12 -9 L10 -9 L19 -3 L19 3 L10 9 L-12 9 Z" fill="#0f172a" opacity="0.82" />
+            <path d="M-12 -9 L10 -9 L4 -4 L-12 -4 Z" fill="#ffffff" opacity="0.3" />
+            <rect x="-44" y="-16" width="7" height="32" rx="2" fill="#0b1120" />
+            <circle cx="41" cy="-9" r="2.2" fill="#fef9c3" />
+            <circle cx="41" cy="9" r="2.2" fill="#fef9c3" />
+          </g>
+        </defs>
+
+        <!-- Grass and horizon -->
+        <path d="M0 392 Q600 348 1200 350 L1200 630 L0 630 Z" fill="url(#grass)" />
+        <path d="M0 470 L1200 402 L1200 414 L0 482 Z" fill="#ffffff" opacity="0.06" />
+        <path d="M0 540 L1200 470 L1200 486 L0 556 Z" fill="#ffffff" opacity="0.05" />
+
+        <!-- Track: red/white kerbs, grey tarmac, dashed centre line -->
+        <ellipse cx="600" cy="220" rx="560" ry="210" fill="url(#glow)" />
+        <path d="M-60 600 Q500 480 1260 380" fill="none" stroke="#d92626" stroke-width="150" />
+        <path d="M-60 600 Q500 480 1260 380" fill="none" stroke="#f8fafc" stroke-width="150" stroke-dasharray="24 24" />
+        <path d="M-60 600 Q500 480 1260 380" fill="none" stroke="#4a4f5a" stroke-width="110" />
+        <path d="M-60 600 Q500 480 1260 380" fill="none" stroke="#f8fafc" stroke-width="5" stroke-dasharray="26 22" opacity="0.85" />
+
+        <!-- Cars: green chased by yellow and blue, red in the lead -->
+        <use href="#car" style="color: #22c55e" transform="translate(101 567) rotate(-11.3) scale(1.15)" />
+        <use href="#car" style="color: #facc15" transform="translate(245 539) rotate(-10.6) scale(1.15)" />
+        <use href="#car" style="color: #3b82f6" transform="translate(394 512) rotate(-10.0) scale(1.15)" />
+        <use href="#car" style="color: #e63946" transform="translate(550 485) rotate(-9.5) scale(1.15)" />
+
+        <!-- Checkered strip along the top edge -->
+        <rect x="0" y="0" width="1200" height="16" fill="url(#checks)" />
+      </svg>
+
+      <div class="logo-wrap">
+        <h1 class="logo">RC RACER</h1>
+        <p class="tagline">Four tracks. Three laps. Top three or bust.</p>
+      </div>
+
+      <div class="footer">Play free in your browser &middot; <b>rc-racer.vercel.app</b></div>
+    </div>
+  </body>
+</html>
