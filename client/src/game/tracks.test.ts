@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { RAMP_LENGTH } from './jumps';
 import { buildRacingLine } from './racingLine';
 import { gridPosition, OPPONENTS, PLAYER, SLOT_LENGTH, SLOT_WIDTH, START_LINE_DEPTH } from './racers';
-import { TRACKS } from './tracks';
+import { ALL_TRACKS } from './tracks';
 import { TrackPath } from './trackPath';
 import { NO_INPUT, RaceWorld } from './world';
 
 const DT = 1 / 120;
 
-describe.each(TRACKS)('$name', (def) => {
+describe.each(ALL_TRACKS)('$name', (def) => {
   const track = new TrackPath(def.controlPoints, def.halfWidth);
   const line = buildRacingLine(track);
   const n = track.points.length;

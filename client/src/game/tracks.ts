@@ -1,5 +1,6 @@
-import { DEMO_LAYOUT, pickupRow, type TrackLayout } from './items';
-import { DEMO_TRACK, type Point } from './trackPath';
+import { DEMO_LAYOUT, pickupRow, type TrackLayout, type TrackSpot } from './items';
+import { RAMP_LENGTH } from './jumps';
+import { DEMO_TRACK, TrackPath, type Point } from './trackPath';
 
 // The season's tracks, in race order. Each must pass tracks.test.ts: no corner tighter than the
 // road is wide, hazards only where the racing line is steady enough to steer round them, and a
@@ -26,6 +27,8 @@ export interface TrackDef {
   controlPoints: Point[];
   layout: TrackLayout;
   theme: TrackTheme;
+  /** True for a track driven the other way round (see reverseTrack). */
+  reversed?: boolean;
 }
 
 const pts = (coords: number[][]): Point[] => coords.map(([x, z]) => ({ x, z }));
@@ -121,3 +124,39 @@ export const TRACKS: TrackDef[] = [
     theme: { sky: '#c9dbe9', ground: '#eef3f7', road: '#59616e', scenery: 'pines', weather: 'snow' },
   },
 ];
+
+/**
+ * The same road driven the other way. The start line stays where it is, so the grid sits just beyond it
+ * in the original direction. A spot `at` a fraction of the lap becomes `1 - at` with left and right
+ * swapped. A ramp fills a stretch of road and is placed by its foot, which is now at the other end of it.
+ */
+export function reverseTrack(def: TrackDef): TrackDef {
+  // Listing the control points backwards, with the first one held, is the same closed curve the other way.
+  const [first, ...rest] = def.controlPoints;
+  const length = new TrackPath(def.controlPoints, def.halfWidth).length;
+  const wrap = (at: number) => ((at % 1) + 1) % 1;
+  const mirror = <T extends TrackSpot>(spot: T): T => ({ ...spot, at: wrap(1 - spot.at), lateral: -spot.lateral });
+  return {
+    ...def,
+    id: `${def.id}-rev`,
+    name: `${def.name} (Reverse)`,
+    reversed: true,
+    controlPoints: [first, ...rest.reverse()],
+    layout: {
+      hazards: def.layout.hazards.map(mirror),
+      pickups: def.layout.pickups.map(mirror),
+      boostPads: def.layout.boostPads.map(mirror),
+      ramps: def.layout.ramps?.map((ramp) => ({
+        ...ramp,
+        ...(ramp.lateral === undefined ? {} : { lateral: -ramp.lateral }),
+        at: wrap(1 - ramp.at - RAMP_LENGTH / length),
+      })),
+    },
+  };
+}
+
+/** Every track driven the other way, in the same order. */
+export const REVERSED_TRACKS: TrackDef[] = TRACKS.map(reverseTrack);
+
+/** Every track there is, either way round: what the guard tests run over and what a records reset clears. */
+export const ALL_TRACKS: TrackDef[] = [...TRACKS, ...REVERSED_TRACKS];

@@ -38,7 +38,7 @@ import { Garage } from './ui/garage';
 import { PauseCard } from './ui/pause';
 import { SettingsCard } from './ui/settings';
 import { RecordsCard, TitleCard, type TitleInfo } from './ui/title';
-import { VehicleCard } from './ui/vehicle';
+import { VehicleCard, type SeasonModes } from './ui/vehicle';
 
 const STEP = 1 / 120;
 const MAX_FRAME = 0.25;
@@ -225,7 +225,7 @@ const titleCard = new TitleCard(titleInfo, {
   settings: () => openSettings(true),
   howToPlay: () => pushCard(howtoCard),
 });
-const recordsCard = new RecordsCard(popCard, () => season.state.vehicle);
+const recordsCard = new RecordsCard(popCard, () => season.state);
 const howtoCard = new BackCard('howto', 'howto-back', popCard);
 const settingsCard = new SettingsCard(sound, {
   back: popCard,
@@ -240,7 +240,7 @@ const pauseCard = new PauseCard(canRestart, {
   settings: () => openSettings(false),
   quit: quitToTitle,
 });
-const vehicleCard = new VehicleCard({ choose: startSeason, back: backFromVehicle }, () => season.state.easy);
+const vehicleCard = new VehicleCard({ choose: startSeason, back: backFromVehicle }, () => season.state);
 const allCards: MenuCard[] = [titleCard, recordsCard, howtoCard, settingsCard, pauseCard, vehicleCard];
 
 /** Takes the current race's scene, cars and item effects out of the scene and frees them. */
@@ -351,8 +351,8 @@ function newSeason(): void {
   pushCard(vehicleCard);
 }
 
-function startSeason(vehicle: VehicleId, easy: boolean): void {
-  season.restart(vehicle, easy);
+function startSeason(vehicle: VehicleId, { easy, reverse }: SeasonModes): void {
+  season.restart(vehicle, easy, reverse);
   persist();
   startRace();
 }
