@@ -32,6 +32,9 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  /* No double-tap zoom, and no pull-to-refresh or rubber-banding over the game. */
+  touch-action: manipulation;
+  overscroll-behavior: none;
   background: var(--sky);
   font-family: var(--font);
   color: var(--hud-text);
@@ -42,6 +45,7 @@ body {
   display: block;
   width: 100%;
   height: 100%;
+  touch-action: none;
 }
 
 .hud {
@@ -796,7 +800,7 @@ body.is-idle .minimap {
   -webkit-touch-callout: none;
 }
 
-.touch-steer,
+.touch-stick,
 .touch-btn,
 .touch-mini {
   pointer-events: auto;
@@ -804,30 +808,39 @@ body.is-idle .minimap {
   -webkit-tap-highlight-color: transparent;
 }
 
-.touch-steer {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  width: 140px;
-  height: 92px;
-  border-radius: 18px;
-  overflow: hidden;
+.touch-stick {
+  position: relative;
+  width: 136px;
+  height: 136px;
+  border-radius: 50%;
   background: var(--touch-bg);
-  color: var(--hud-text);
   box-shadow: inset 0 0 0 2px var(--panel-line);
 }
 
-.touch-half {
-  display: grid;
-  place-items: center;
-  font-size: 30px;
-  line-height: 1;
+/* A faint ring and cross hint at where the knob sits and which way it steers. */
+.touch-stick::before {
+  content: '';
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.12);
 }
 
-.touch-half + .touch-half {
-  box-shadow: inset 2px 0 0 var(--panel-line);
+.touch-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: rgb(248 250 252 / 0.55);
+  box-shadow:
+    inset 0 0 0 2px var(--panel-line),
+    0 2px 8px rgb(2 6 23 / 0.35);
+  transform: translate(calc(-50% + var(--knob-x, 0px)), calc(-50% + var(--knob-y, 0px)));
 }
 
-.touch-half.is-pressed {
+.touch-stick.is-pressed .touch-knob {
   background: var(--touch-pressed);
 }
 
@@ -917,9 +930,14 @@ body.is-idle .minimap {
 
 /* Short landscape screens (phones on their side) get smaller controls, so they leave the car visible. */
 @media (max-height: 500px) {
-  .touch-steer {
-    width: 124px;
-    height: 72px;
+  .touch-stick {
+    width: 108px;
+    height: 108px;
+  }
+
+  .touch-knob {
+    width: 46px;
+    height: 46px;
   }
 
   .touch-right {
