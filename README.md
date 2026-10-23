@@ -61,3 +61,6 @@ which builds `client/` as a static site (`vercel.json`). Pull requests get previ
 5. Progression: several tracks, upgrades between races, top-3-or-game-over. **(done)**
 6. Polish: sound, gamepad and touch controls, title and pause menus, ramps and jumps **(done)**; track
    editor.
+
+Later: a Roblox version. The plan, and a first spike to size it up, are in
+[docs/roblox-port.md](docs/roblox-port.md).
