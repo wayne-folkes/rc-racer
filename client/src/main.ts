@@ -240,7 +240,7 @@ const pauseCard = new PauseCard(canRestart, {
   settings: () => openSettings(false),
   quit: quitToTitle,
 });
-const vehicleCard = new VehicleCard({ choose: startSeason, back: backFromVehicle });
+const vehicleCard = new VehicleCard({ choose: startSeason, back: backFromVehicle }, () => season.state.easy);
 const allCards: MenuCard[] = [titleCard, recordsCard, howtoCard, settingsCard, pauseCard, vehicleCard];
 
 /** Takes the current race's scene, cars and item effects out of the scene and frees them. */
@@ -276,6 +276,7 @@ function buildRace(def: TrackDef, mode: BuildMode): void {
   world = new RaceWorld(track, {
     layout: def.layout,
     vehicle: season.state.vehicle,
+    easy: season.state.easy,
     playerTuning: season.playerTuning,
     opponentPace: season.opponentPace,
     seed: raceCount,
@@ -350,8 +351,8 @@ function newSeason(): void {
   pushCard(vehicleCard);
 }
 
-function startSeason(vehicle: VehicleId): void {
-  season.restart(vehicle);
+function startSeason(vehicle: VehicleId, easy: boolean): void {
+  season.restart(vehicle, easy);
   persist();
   startRace();
 }

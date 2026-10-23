@@ -22,6 +22,21 @@ export const OPPONENTS: Opponent[] = [
   { name: 'Green', color: '#22c55e', gridSlot: 2, skill: { pace: 0.81, steerGain: 2.0 } },
 ];
 
+/** Where the player starts in easy mode: 2nd. */
+export const EASY_PLAYER_SLOT = 1;
+
+/**
+ * Who starts where. In easy mode the player moves up to 2nd and whoever was there drops to the back, so
+ * the same four slots are filled either way.
+ */
+export function startingGrid(opponents: Opponent[], easy: boolean): { player: RacerInfo; opponents: Opponent[] } {
+  if (!easy) return { player: PLAYER, opponents };
+  return {
+    player: { ...PLAYER, gridSlot: EASY_PLAYER_SLOT },
+    opponents: opponents.map((o) => (o.gridSlot === EASY_PLAYER_SLOT ? { ...o, gridSlot: PLAYER.gridSlot } : o)),
+  };
+}
+
 /** Distance behind the finish line of pole position, and between grid rows. */
 const GRID_FRONT = 5;
 const GRID_ROW_GAP = 3.5;

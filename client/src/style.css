@@ -522,6 +522,19 @@ body {
   outline-offset: 3px;
 }
 
+/* A toggle that's on: ringed and lettered in the accent colour. */
+.results-button-secondary[aria-pressed='true'] {
+  color: var(--hud-accent);
+  box-shadow: inset 0 0 0 2px var(--hud-accent);
+}
+
+.easy-hint {
+  margin: 8px 0 14px;
+  color: var(--hud-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
 /* The title, pause and settings cards: a column of full-width buttons. */
 .menu-stack {
   display: flex;

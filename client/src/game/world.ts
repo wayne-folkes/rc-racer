@@ -11,7 +11,7 @@ import { airTuning, buildRamps, updateHeight, type JumpEvent, type Ramp } from '
 import { BOOST_PAD_RADIUS, DEMO_LAYOUT, ItemSystem, SPIN_TIME, type RacerStatus, type TrackLayout } from './items';
 import { Race, TOTAL_LAPS, type RaceEvent } from './race';
 import { buildRacingLine, type RacingLine } from './racingLine';
-import { gridPosition, OPPONENTS, PLAYER, type Opponent, type RacerInfo } from './racers';
+import { gridPosition, OPPONENTS, startingGrid, type Opponent, type RacerInfo } from './racers';
 import type { Projection, TrackPath } from './trackPath';
 import { DEFAULT_VEHICLE, VEHICLES, type VehicleId } from './vehicles';
 
@@ -66,6 +66,8 @@ export interface WorldOptions {
   playerTuning?: CarTuning;
   /** Multiplier on every opponent's pace; the season raises it round by round. */
   opponentPace?: number;
+  /** Easy mode: the player starts 2nd, and cars that get well ahead ease off more. */
+  easy?: boolean;
 }
 
 export class RaceWorld {
@@ -92,15 +94,15 @@ export class RaceWorld {
   ) {
     const vehicleTuning = VEHICLES[options.vehicle ?? DEFAULT_VEHICLE].tuning;
     this.line = buildRacingLine(track, vehicleTuning);
-    const opponents = options.opponents ?? OPPONENTS;
+    const grid = startingGrid(options.opponents ?? OPPONENTS, options.easy ?? false);
     this.playerTuning = options.playerTuning ?? vehicleTuning;
     const playerDriver = options.autopilot
       ? new AiDriver(track, this.line, options.autopilot, this.playerTuning)
       : null;
     const opponentPace = options.opponentPace ?? 1;
     this.racers = [
-      { info: PLAYER, car: gridPosition(track, PLAYER.gridSlot), driver: playerDriver },
-      ...opponents.map((o) => ({
+      { info: grid.player, car: gridPosition(track, grid.player.gridSlot), driver: playerDriver },
+      ...grid.opponents.map((o) => ({
         info: o,
         car: gridPosition(track, o.gridSlot),
         driver: new AiDriver(track, this.line, { ...o.skill, pace: o.skill.pace * opponentPace }, vehicleTuning),
@@ -166,7 +168,7 @@ export class RaceWorld {
         const proj = track.project(racer.car.x, racer.car.z);
         const others = cars.filter((c) => c !== racer.car);
         // The player's own autopilot doesn't rubber-band against itself.
-        const boost = i === 0 ? 1 : rubberBand(playerProgress - race.progress(i));
+        const boost = i === 0 ? 1 : rubberBand(playerProgress - race.progress(i), this.options.easy);
         const decision = racer.driver.drive(racer.car, proj, others, boost, dt, obstacles, this.boostPadTargets());
         if (decision.respawn) this.resetCar(i);
         else input = decision.input;
