@@ -27,6 +27,8 @@ const GRID_FRONT = 5;
 const GRID_ROW_GAP = 3.5;
 /** Grid slots alternate left and right of the centreline by this much. */
 const GRID_SIDE = 2;
+/** How deep the checkered block at the start line is, along the road, centred on the line. */
+export const START_LINE_DEPTH = 2.8;
 /** The painted pad each car starts on: a little bigger than a car, along and across the road. */
 export const SLOT_LENGTH = 3;
 export const SLOT_WIDTH = 2.2;

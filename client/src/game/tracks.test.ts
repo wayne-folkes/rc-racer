@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RAMP_LENGTH } from './jumps';
 import { buildRacingLine } from './racingLine';
-import { gridPosition, OPPONENTS, PLAYER, SLOT_LENGTH, SLOT_WIDTH } from './racers';
+import { gridPosition, OPPONENTS, PLAYER, SLOT_LENGTH, SLOT_WIDTH, START_LINE_DEPTH } from './racers';
 import { TRACKS } from './tracks';
 import { TrackPath } from './trackPath';
 import { NO_INPUT, RaceWorld } from './world';
@@ -41,7 +41,7 @@ describe.each(TRACKS)('$name', (def) => {
   });
 
   it('fits every starting pad on the road and behind the start line', () => {
-    const startLineHalfDepth = 0.7;
+    const startLineHalfDepth = START_LINE_DEPTH / 2;
     for (const { gridSlot } of [PLAYER, ...OPPONENTS]) {
       const { x, z } = gridPosition(track, gridSlot);
       const { lateral, distance } = track.project(x, z);
