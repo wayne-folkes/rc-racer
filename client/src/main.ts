@@ -8,6 +8,7 @@ import {
   Scene,
   WebGLRenderer,
 } from 'three';
+import { inject } from '@vercel/analytics';
 import './style.css';
 import { distanceVolume, engineNote, Sound, type SoundName } from './game/audio';
 import { DEFAULT_TUNING, speed } from './game/carPhysics';
@@ -78,6 +79,9 @@ interface CarView {
  * summary cards), 'racing' is a live race, and 'demo' is the title screen's attract race.
  */
 type BuildMode = 'idle' | 'racing' | 'demo';
+
+// Initialize Vercel Web Analytics
+inject();
 
 const container = document.getElementById('app')!;
 const renderer = new WebGLRenderer({ antialias: true });
