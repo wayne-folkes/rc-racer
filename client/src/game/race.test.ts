@@ -76,28 +76,73 @@ describe('RaceProgress', () => {
 
 describe('Race', () => {
   it('locks controls during the countdown, then says go', () => {
-    const race = new Race(LEN, 3);
+    const race = new Race(LEN, 1, 3);
     expect(race.controlsLocked).toBe(true);
     let events: string[] = [];
-    for (let t = 0; t < COUNTDOWN_SECONDS + 0.05; t += 0.01) events = events.concat(race.update(0.01, 95));
+    for (let t = 0; t < COUNTDOWN_SECONDS + 0.05; t += 0.01) events = events.concat(race.update(0.01, [95]));
     expect(events).toEqual(['go']);
     expect(race.phase).toBe('racing');
     expect(race.controlsLocked).toBe(false);
   });
 
   it('announces the final lap and finishes after the last lap', () => {
-    const race = new Race(LEN, 3);
-    while (race.phase === 'countdown') race.update(0.1, 95);
+    const race = new Race(LEN, 1, 3);
+    while (race.phase === 'countdown') race.update(0.1, [95]);
 
     const events: string[] = [];
-    for (let d = 95; d <= 400 + 2; d++) events.push(...race.update(0.1, d % LEN));
+    for (let d = 95; d <= 400 + 2; d++) events.push(...race.update(0.1, [d % LEN]));
     expect(events).toEqual(['lap', 'lap', 'finalLap', 'finish']);
     expect(race.phase).toBe('finished');
     expect(race.finishTime).toBeCloseTo(race.player.lapTimes.reduce((a, b) => a + b, 0), 5);
     expect(race.currentLap).toBe(3);
 
     // Nothing more happens once finished.
-    expect(race.update(0.1, 10)).toEqual([]);
+    expect(race.update(0.1, [10])).toEqual([]);
+  });
+});
+
+describe('Race standings', () => {
+  /** Three racers on a 2-lap race, already past GO and over the start line. */
+  function startedRace() {
+    const race = new Race(LEN, 3, 2);
+    while (race.phase === 'countdown') race.update(0.1, [95, 94, 93]);
+    for (let d = 95; d <= 102; d++) race.update(0.1, [d % LEN, (d - 1) % LEN, (d - 2) % LEN]);
+    return race;
+  }
+
+  it('orders racers by distance covered', () => {
+    const race = startedRace();
+    race.update(0.1, [10, 30, 20]);
+    expect(race.standings()).toEqual([1, 2, 0]);
+    expect(race.position(0)).toBe(3);
+  });
+
+  it('ranks a car a lap ahead above one further round the current lap', () => {
+    const race = new Race(LEN, 2, 3);
+    while (race.phase === 'countdown') race.update(0.1, [95, 95]);
+    for (let d = 95; d <= 102; d++) race.update(0.1, [d % LEN, d % LEN]);
+    for (let d = 3; d <= 110; d++) race.update(0.1, [d % LEN, 3 + (d - 3) * 0.5]); // racer 0 laps
+    expect(race.racers[0].lapsCompleted).toBe(1);
+    race.update(0.1, [10, 80]);
+    expect(race.standings()).toEqual([0, 1]);
+  });
+
+  it('puts finishers first, in finishing order, and keeps timing the others', () => {
+    const race = startedRace();
+    const events: string[] = [];
+    // Racer 1 finishes first, then the player; racer 2 is still going.
+    for (let d = 3; d <= 205; d++) events.push(...race.update(0.1, [Math.max(3, d - 5) % LEN, d % LEN, 20]));
+    expect(race.finishTimes[1]).not.toBeNull();
+    expect(race.finishTimes[0]).not.toBeNull();
+    expect(race.finishTimes[2]).toBeNull();
+    expect(events).toContain('finish');
+    expect(race.phase).toBe('finished');
+    expect(race.standings()).toEqual([1, 0, 2]);
+
+    // The clock keeps running after the player finishes, so the others still get a time.
+    for (let d = 20; d <= 205; d++) race.update(0.1, [5, 5, d % LEN]);
+    expect(race.finishTimes[2]).toBeGreaterThan(race.finishTimes[0]!);
+    expect(race.standings()).toEqual([1, 0, 2]);
   });
 });
 

@@ -112,17 +112,24 @@ export class TrackPath {
   }
 }
 
+/** Every corner keeps a radius above the half-width (see trackPath.test.ts), so walls never fold. */
 export const DEMO_TRACK: Point[] = [
-  { x: -50, z: -30 },
-  { x: 0, z: -38 },
-  { x: 45, z: -35 },
-  { x: 62, z: -10 },
-  { x: 45, z: 10 },
-  { x: 15, z: 8 },
-  { x: 5, z: 25 },
-  { x: 25, z: 42 },
-  { x: 5, z: 58 },
-  { x: -35, z: 52 },
-  { x: -62, z: 25 },
-  { x: -64, z: -8 },
+  { x: -50, z: -35 },
+  { x: -20, z: -39 },
+  { x: 10, z: -39 },
+  { x: 36, z: -35 },
+  { x: 55, z: -27 },
+  { x: 63, z: -12 },
+  { x: 57, z: 1 },
+  { x: 42, z: 5 },
+  { x: 24, z: 6 },
+  { x: 12, z: 12 },
+  { x: 6, z: 26 },
+  { x: 11, z: 41 },
+  { x: 6, z: 55 },
+  { x: -10, z: 64 },
+  { x: -34, z: 62 },
+  { x: -56, z: 50 },
+  { x: -67, z: 26 },
+  { x: -66, z: -6 },
 ];

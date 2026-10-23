@@ -8,22 +8,21 @@ import {
   WebGLRenderer,
 } from 'three';
 import './style.css';
-import { createCar, speed, stepCar, type CarInput, type CarState } from './game/carPhysics';
+import { speed } from './game/carPhysics';
 import { CarModel } from './game/carModel';
-import { collideWithWalls } from './game/collision';
 import { FollowCamera } from './game/followCamera';
 import { Keyboard } from './game/input';
-import { formatTime, Race, type RaceEvent } from './game/race';
+import { formatTime, type RaceEvent } from './game/race';
 import { updateRecords } from './game/records';
 import { buildTrackScene } from './game/trackScene';
 import { DEMO_TRACK, TrackPath, type Projection } from './game/trackPath';
+import { RaceWorld } from './game/world';
 
 const STEP = 1 / 120;
 const MAX_FRAME = 0.25;
 const SHADOW_EXTENT = 40;
-const GRID_OFFSET = 6;
 const TRACK_ID = 'demo';
-const NO_INPUT: CarInput = { throttle: 0, steer: 0, handbrake: false };
+const ORDINAL_SUFFIXES = ['th', 'st', 'nd', 'rd'];
 /** Dot product of car velocity and track direction below this means the car is going the wrong way. */
 const WRONG_WAY_DOT = -3;
 /** Seconds of wrong-way driving before the WRONG WAY banner shows. */
@@ -70,79 +69,76 @@ scene.add(sun, sun.target);
 const track = new TrackPath(DEMO_TRACK, 5.5);
 scene.add(buildTrackScene(track));
 
-/** The player's grid slot, just behind the finish line, facing the way the track runs. */
-function gridPosition(): CarState {
-  const p = track.pointAt(track.length - GRID_OFFSET);
-  return createCar(p.x, p.z, Math.atan2(p.tz, p.tx));
-}
-
-const car = gridPosition();
-const carModel = new CarModel();
-scene.add(carModel.root);
+const world = new RaceWorld(track);
+// One model per racer, in the same order as world.racers, so index 0 is the player.
+const carViews = world.racers.map((racer) => {
+  const model = new CarModel(racer.info.color);
+  scene.add(model.root);
+  return { racer, model };
+});
 
 const followCamera = new FollowCamera();
-followCamera.snapTo(car);
+followCamera.snapTo(world.player);
 
 const keyboard = new Keyboard();
-let race = new Race(track.length);
 let wrongWayTime = 0;
 let timedBanner: TimedBanner | null = null;
 let shownBannerKey = '';
+let standingsKey = '';
 
 const hud = {
   lap: document.getElementById('hud-lap')!,
   time: document.getElementById('hud-time')!,
   lapTime: document.getElementById('hud-lap-time')!,
   best: document.getElementById('hud-best')!,
+  position: document.getElementById('hud-position')!,
+  positionTotal: document.getElementById('hud-position-total')!,
   speed: document.getElementById('hud-speed')!,
 };
+hud.positionTotal.textContent = `/ ${world.racers.length}`;
 
 const banner = document.getElementById('banner')!;
 
 const results = {
   root: document.getElementById('results')!,
+  title: document.getElementById('results-title')!,
   total: document.getElementById('results-total')!,
   totalBadge: document.getElementById('results-total-badge')!,
   totalRecord: document.getElementById('results-total-record')!,
   best: document.getElementById('results-best')!,
   bestBadge: document.getElementById('results-best-badge')!,
   bestRecord: document.getElementById('results-best-record')!,
+  standings: document.getElementById('results-standings')!,
   laps: document.getElementById('results-laps')!,
   again: document.getElementById('results-again')!,
 };
 
-/** Puts the car back on the centreline nearest to it, facing the way the track runs. */
+/** Puts the player's car back on the centreline nearest to it, facing the way the track runs. */
 function resetCar(): void {
-  const proj = track.project(car.x, car.z);
-  const p = track.points[proj.index];
-  Object.assign(car, createCar(p.x, p.z, Math.atan2(proj.tz, proj.tx)));
-  race.player.resetPosition();
+  world.resetCar(0);
   wrongWayTime = 0;
 }
 
 function restartRace(): void {
-  Object.assign(car, gridPosition());
-  race = new Race(track.length);
+  world.restart();
   wrongWayTime = 0;
   timedBanner = null;
   results.root.hidden = true;
-  followCamera.snapTo(car);
+  followCamera.snapTo(world.player);
 }
 
 function fixedUpdate(dt: number): void {
-  const input = race.controlsLocked || race.phase === 'finished' ? NO_INPUT : keyboard.carInput();
-  stepCar(car, input, dt);
-  const { proj } = collideWithWalls(car, track);
-  handleRaceEvents(race.update(dt, proj.distance));
-  updateWrongWay(dt, proj);
+  handleRaceEvents(world.step(dt, keyboard.carInput()));
+  updateWrongWay(dt, world.playerProj);
 }
 
-/** Counts how long the car has been driving against the track direction. */
+/** Counts how long the player's car has been driving against the track direction. */
 function updateWrongWay(dt: number, proj: Projection): void {
-  if (race.phase !== 'racing') {
+  if (world.race.phase !== 'racing') {
     wrongWayTime = 0;
     return;
   }
+  const car = world.player;
   const dot = car.vx * proj.tx + car.vz * proj.tz;
   wrongWayTime = dot < WRONG_WAY_DOT ? wrongWayTime + dt : 0;
 }
@@ -171,7 +167,7 @@ function tickTimedBanner(dt: number): void {
 /** A timed message wins, then the countdown, then WRONG WAY. */
 function currentBanner(): Banner | null {
   if (timedBanner) return { text: timedBanner.text, tone: timedBanner.tone };
-  if (race.phase === 'countdown') return { text: String(Math.ceil(race.countdown)), tone: 'white' };
+  if (world.race.phase === 'countdown') return { text: String(Math.ceil(world.race.countdown)), tone: 'white' };
   if (wrongWayTime > WRONG_WAY_DELAY) return { text: 'WRONG WAY', tone: 'red' };
   return null;
 }
@@ -196,19 +192,27 @@ function updateBanner(): void {
 }
 
 function lastLapTime(): number {
-  const laps = race.player.lapTimes;
+  const laps = world.race.player.lapTimes;
   return laps[laps.length - 1] ?? 0;
 }
 
+/** 1 becomes "1st", 2 "2nd", 3 "3rd", 4 "4th", and 11 to 13 always take "th". */
+function ordinal(n: number): string {
+  const teen = n % 100 >= 11 && n % 100 <= 13;
+  const suffix = teen || n % 10 > 3 ? 'th' : ORDINAL_SUFFIXES[n % 10];
+  return `${n}${suffix}`;
+}
+
 function updateHud(): void {
-  const finished = race.phase === 'finished';
-  hud.lap.textContent = `${race.currentLap} / ${race.totalLaps}`;
-  hud.time.textContent = formatTime(race.finishTime ?? race.clock);
-  const lapTime = finished ? lastLapTime() : race.player.currentLapTime(race.clock);
+  const finished = world.race.phase === 'finished';
+  hud.lap.textContent = `${world.race.currentLap} / ${world.race.totalLaps}`;
+  hud.time.textContent = formatTime(world.race.finishTime ?? world.race.clock);
+  const lapTime = finished ? lastLapTime() : world.race.player.currentLapTime(world.race.clock);
   hud.lapTime.textContent = formatTime(lapTime);
-  const best = race.player.bestLap;
+  const best = world.race.player.bestLap;
   hud.best.textContent = best === null ? '--' : formatTime(best);
-  hud.speed.textContent = String(Math.round(speed(car) * 3.6));
+  hud.position.textContent = ordinal(world.race.position(0));
+  hud.speed.textContent = String(Math.round(speed(world.player) * 3.6));
 }
 
 /** Under a time: the previous best if this one beat it, otherwise the stored record. */
@@ -236,11 +240,51 @@ function lapRow(index: number, time: number, isBest: boolean): HTMLLIElement {
   return row;
 }
 
+/** One line of the standings: position, colour dot, name, then finish time or "Racing…". */
+function standingRow(racer: number, place: number): HTMLLIElement {
+  const { info } = world.racers[racer];
+  const finish = world.race.finishTimes[racer];
+
+  const row = document.createElement('li');
+  row.className = racer === 0 ? 'standing is-player' : 'standing';
+
+  const position = document.createElement('span');
+  position.className = 'standing-pos';
+  position.textContent = ordinal(place);
+
+  const dot = document.createElement('span');
+  dot.className = 'standing-dot';
+  dot.style.backgroundColor = info.color;
+
+  const name = document.createElement('span');
+  name.className = 'standing-name';
+  name.textContent = info.name;
+
+  const time = document.createElement('span');
+  time.className = finish === null ? 'standing-time is-racing' : 'standing-time';
+  time.textContent = finish === null ? 'Racing…' : formatTime(finish);
+
+  row.append(position, dot, name, time);
+  return row;
+}
+
+/** Rebuilds the standings only when their order or a finish time has changed. */
+function updateStandings(): void {
+  const order = world.race.standings();
+  const key = order.map((racer) => `${racer}:${world.race.finishTimes[racer] ?? ''}`).join('|');
+  if (key === standingsKey) return;
+  standingsKey = key;
+  results.standings.replaceChildren(...order.map((racer, i) => standingRow(racer, i + 1)));
+}
+
 /** Records the finished race, then fills in and shows the results card. */
 function showResults(): void {
-  const raceTime = race.finishTime ?? race.clock;
-  const bestLap = race.player.bestLap;
+  const raceTime = world.race.finishTime ?? world.race.clock;
+  const bestLap = world.race.player.bestLap;
   const { previous, records, newRaceRecord, newLapRecord } = updateRecords(TRACK_ID, raceTime, bestLap);
+
+  const place = world.race.position(0);
+  results.title.textContent = place === 1 ? 'You won!' : `You finished ${ordinal(place)}`;
 
   results.total.textContent = formatTime(raceTime);
   results.totalBadge.hidden = !newRaceRecord;
@@ -250,7 +294,10 @@ function showResults(): void {
   results.bestBadge.hidden = !newLapRecord;
   results.bestRecord.textContent = recordLine(newLapRecord, previous.bestLap, records.bestLap);
 
-  const lapTimes = race.player.lapTimes;
+  standingsKey = '';
+  updateStandings();
+
+  const lapTimes = world.race.player.lapTimes;
   const bestIndex = lapTimes.indexOf(Math.min(...lapTimes));
   results.laps.replaceChildren(...lapTimes.map((time, i) => lapRow(i, time, i === bestIndex)));
 
@@ -261,7 +308,7 @@ results.again.addEventListener('click', restartRace);
 
 // Dev-only handle for poking at game state from the browser console.
 if (import.meta.env.DEV) {
-  Object.assign(window, { __game: { car, track, get race() { return race; } } });
+  Object.assign(window, { __game: { world, track } });
 }
 
 let last = performance.now();
@@ -271,7 +318,7 @@ function frame(now: number): void {
   const dt = Math.min(MAX_FRAME, (now - last) / 1000);
   last = now;
 
-  if (keyboard.wasPressed('KeyR') && race.phase === 'racing') resetCar();
+  if (keyboard.wasPressed('KeyR') && world.race.phase === 'racing') resetCar();
   if (!results.root.hidden && keyboard.wasPressed('Enter')) restartRace();
   keyboard.endFrame();
 
@@ -283,11 +330,12 @@ function frame(now: number): void {
 
   tickTimedBanner(dt);
   updateBanner();
-  carModel.sync(car, dt);
-  followCamera.update(car, dt);
-  sun.position.set(car.x + 30, 60, car.z + 20);
-  sun.target.position.set(car.x, 0, car.z);
+  for (const { racer, model } of carViews) model.sync(racer.car, dt);
+  followCamera.update(world.player, dt);
+  sun.position.set(world.player.x + 30, 60, world.player.z + 20);
+  sun.target.position.set(world.player.x, 0, world.player.z);
   updateHud();
+  if (!results.root.hidden) updateStandings();
 
   renderer.render(scene, followCamera.camera);
   requestAnimationFrame(frame);

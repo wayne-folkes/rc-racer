@@ -1,0 +1,188 @@
+import { DEFAULT_TUNING, forwardSpeed, speed, type CarInput, type CarState, type CarTuning } from './carPhysics';
+import type { RacingLine } from './racingLine';
+import type { Projection, TrackPath } from './trackPath';
+
+export interface AiSkill {
+  /** Multiplier on the racing line's target speeds and the car's top speed. */
+  pace: number;
+  /** How hard it steers towards its target (steer per radian of error). */
+  steerGain: number;
+}
+
+/** Cars within this distance ahead... */
+const LOOK_AHEAD_FOR_CARS = 10;
+/** ...and less than this far to either side are in the way. */
+const IN_THE_WAY_SIDE = 2.4;
+/** How far to move across to get past a car in the way. */
+const PASS_OFFSET = 3.2;
+/** How fast the car moves across the track when changing lines (m/s). */
+const LINE_CHANGE_RATE = 5;
+/** Seconds to stick with a chosen passing side, so it doesn't dither left and right. */
+const PASS_COMMIT_SECONDS = 1.2;
+/** Closer than this behind a car it can't get past, it matches that car's speed. */
+const FOLLOW_DISTANCE = 6;
+/** Seconds without making progress before the car is put back on the track. */
+const STUCK_SECONDS = 2;
+/** Proportional throttle: full throttle or brake at this many m/s off the target speed. */
+const SPEED_ERROR_FOR_FULL = 2;
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/**
+ * Pace multiplier that keeps races close without trapping the player in a pack: cars well ahead
+ * of the player ease off a little, cars behind push a little. `gap` is the player's progress
+ * minus the AI car's, in metres.
+ */
+export function rubberBand(gap: number): number {
+  return clamp(1 + gap * 0.002, 0.95, 1.03);
+}
+
+export interface AiDecision {
+  input: CarInput;
+  /** The car is stuck or facing backwards and should be put back on the track. */
+  respawn: boolean;
+}
+
+interface Traffic {
+  /** Sideways position to aim for, in metres right of the centreline. */
+  offset: number;
+  /** Speed cap from a car close ahead that it can't get past, or Infinity. */
+  speedCap: number;
+}
+
+export class AiDriver {
+  /** This car's handling. Its top speed tracks the driver's pace, including rubber-banding. */
+  readonly tuning: CarTuning = { ...DEFAULT_TUNING };
+  private stuckTime = 0;
+  /** Current sideways shift from the racing line; eases towards the wanted shift. */
+  private shift = 0;
+  /** Side it's committed to passing on (-1 left, 1 right, 0 none), and for how much longer. */
+  private passSide = 0;
+  private passTime = 0;
+  /** Where it was aiming while passing, held until the commitment runs out. */
+  private passOffset = 0;
+
+  constructor(
+    private readonly track: TrackPath,
+    private readonly line: RacingLine,
+    readonly skill: AiSkill,
+  ) {}
+
+  /**
+   * @param proj The car's projection onto the track.
+   * @param others Every other car, to get around.
+   * @param paceBoost Extra pace multiplier, from rubberBand().
+   */
+  drive(car: CarState, proj: Projection, others: CarState[], paceBoost: number, dt: number): AiDecision {
+    const pace = this.skill.pace * paceBoost;
+    this.tuning.maxSpeed = DEFAULT_TUNING.maxSpeed * pace;
+
+    const n = this.line.points.length;
+    const lookahead = 5 + speed(car) * 0.3;
+    const aimIndex = (proj.index + Math.round(lookahead / this.line.spacing)) % n;
+    const lineOffset = this.line.offsets[aimIndex];
+    const room = this.track.halfWidth - 1.2;
+
+    const traffic = this.traffic(car, proj, others, lineOffset, room, dt);
+    const wantedShift = traffic.offset - lineOffset;
+    this.shift += clamp(wantedShift - this.shift, -LINE_CHANGE_RATE * dt, LINE_CHANGE_RATE * dt);
+
+    const offset = clamp(lineOffset + this.shift, -room, room);
+    const p = this.track.points[aimIndex];
+    const t = this.track.tangent(aimIndex);
+    const aimX = p.x - t.z * offset;
+    const aimZ = p.z + t.x * offset;
+
+    let error = Math.atan2(aimZ - car.z, aimX - car.x) - car.heading;
+    error = Math.atan2(Math.sin(error), Math.cos(error));
+    const steer = clamp(error * this.skill.steerGain, -1, 1);
+
+    // Look a few metres ahead for the target speed, so braking starts before the corner.
+    const speedIndex = (proj.index + Math.round(3 / this.line.spacing)) % n;
+    const target = Math.min(this.line.targetSpeed[speedIndex] * pace, traffic.speedCap);
+    let throttle = clamp((target - forwardSpeed(car)) / SPEED_ERROR_FOR_FULL, -1, 1);
+    // Pointing well away from the target (after a spin or a shunt): ease off while turning.
+    if (Math.abs(error) > 0.9) throttle = Math.min(throttle, 0.5);
+
+    return { input: { throttle, steer, handbrake: false }, respawn: this.checkStuck(car, proj, dt) };
+  }
+
+  /**
+   * Works out where to drive among the other cars: on the racing line when it's clear, in a lane
+   * beside a slower car to pass it, never squeezing a car alongside, and following when boxed in.
+   * Positions are sideways offsets from the centreline, with other cars placed relative to this
+   * one (close enough while cars point roughly along the track).
+   */
+  private traffic(
+    car: CarState,
+    proj: Projection,
+    others: CarState[],
+    lineOffset: number,
+    room: number,
+    dt: number,
+  ): Traffic {
+    const fx = Math.cos(car.heading);
+    const fz = Math.sin(car.heading);
+    const mySpeed = forwardSpeed(car);
+    const nearby = others.map((o) => {
+      const dx = o.x - car.x;
+      const dz = o.z - car.z;
+      const side = dx * -fz + dz * fx;
+      return { ahead: dx * fx + dz * fz, side, lateral: proj.lateral + side, speed: o.vx * fx + o.vz * fz };
+    });
+
+    // The nearest slower car ahead that's on the racing line or right in front of this car.
+    let blocker: (typeof nearby)[number] | null = null;
+    for (const o of nearby) {
+      if (o.ahead <= 0 || o.ahead > LOOK_AHEAD_FOR_CARS || o.speed > mySpeed + 1) continue;
+      const inTheWay =
+        Math.abs(o.lateral - lineOffset) < IN_THE_WAY_SIDE || Math.abs(o.side) < IN_THE_WAY_SIDE;
+      if (inTheWay && (!blocker || o.ahead < blocker.ahead)) blocker = o;
+    }
+
+    this.passTime = Math.max(0, this.passTime - dt);
+    let offset = lineOffset;
+    if (blocker) {
+      const fits = (side: number) => Math.abs(blocker.lateral + side * PASS_OFFSET) <= room;
+      if (this.passSide === 0 || !fits(this.passSide)) {
+        // Prefer the side with more road; keep the current side unless it no longer fits.
+        const preferred = blocker.lateral > 0 ? -1 : 1;
+        this.passSide = fits(preferred) ? preferred : fits(-preferred) ? -preferred : preferred;
+      }
+      this.passTime = PASS_COMMIT_SECONDS;
+      this.passOffset = blocker.lateral + this.passSide * PASS_OFFSET;
+    } else if (this.passTime === 0) {
+      this.passSide = 0;
+    }
+    if (this.passSide !== 0) offset = this.passOffset;
+
+    // Leave room for cars alongside instead of steering into them.
+    for (const o of nearby) {
+      if (Math.abs(o.ahead) > 2.5) continue;
+      if (o.side > 0) offset = Math.min(offset, o.lateral - PASS_OFFSET * 0.8);
+      else offset = Math.max(offset, o.lateral + PASS_OFFSET * 0.8);
+    }
+    offset = clamp(offset, -room, room);
+
+    // Right behind a car with no way round: match its speed rather than ram it.
+    const boxedIn = blocker !== null && blocker.ahead < FOLLOW_DISTANCE && Math.abs(blocker.side) < 1.8;
+    return { offset, speedCap: boxedIn ? Math.max(0, blocker!.speed - 0.5) : Infinity };
+  }
+
+  private checkStuck(car: CarState, proj: Projection, dt: number): boolean {
+    const alongTrack = car.vx * proj.tx + car.vz * proj.tz;
+    this.stuckTime = alongTrack < 1.5 ? this.stuckTime + dt : 0;
+    if (this.stuckTime < STUCK_SECONDS) return false;
+    this.stuckTime = 0;
+    return true;
+  }
+
+  /** Call when the race restarts or the car is respawned. */
+  reset(): void {
+    this.stuckTime = 0;
+    this.shift = 0;
+    this.passSide = 0;
+    this.passTime = 0;
+    this.passOffset = 0;
+  }
+}

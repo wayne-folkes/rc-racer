@@ -29,6 +29,18 @@ describe('TrackPath.project', () => {
     expect(half / square.length).toBeLessThan(0.6);
   });
 
+  it('has no corner on the demo track tighter than the road is wide', () => {
+    const track = new TrackPath(DEMO_TRACK, 5.5);
+    const n = track.points.length;
+    for (let i = 0; i < n; i++) {
+      const a = track.tangent((i - 1 + n) % n);
+      const b = track.tangent((i + 1) % n);
+      const turn = Math.abs(Math.atan2(a.x * b.z - a.z * b.x, a.x * b.x + a.z * b.z));
+      const radius = (2 * track.length) / n / turn;
+      expect(radius).toBeGreaterThan(track.halfWidth + 2);
+    }
+  });
+
   it('keeps the demo track wider than a car everywhere', () => {
     const track = new TrackPath(DEMO_TRACK, 5.5);
     expect(track.length).toBeGreaterThan(300);

@@ -3,6 +3,7 @@
   --hud-text: #f8fafc;
   --hud-muted: #94a3b8;
   --hud-accent: #facc15;
+  --accent-soft: rgb(250 204 21 / 0.16);
   --green: #4ade80;
   --red: #f87171;
   --card-bg: rgb(2 6 23 / 0.92);
@@ -46,6 +47,31 @@ body {
   border-radius: 12px;
   padding: 10px 14px;
   font-variant-numeric: tabular-nums;
+}
+
+.hud-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.hud-position {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.hud-position-ordinal {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--hud-accent);
+}
+
+.hud-position-total {
+  color: var(--hud-muted);
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .hud-row {
@@ -215,9 +241,51 @@ body {
 }
 
 .results-lap.is-best {
-  background: rgb(250 204 21 / 0.16);
+  background: var(--accent-soft);
   color: var(--hud-accent);
   font-weight: 700;
+}
+
+.results-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.standing {
+  display: grid;
+  grid-template-columns: 3.2em 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 16px;
+}
+
+.standing.is-player {
+  background: var(--accent-soft);
+  color: var(--hud-accent);
+  font-weight: 700;
+}
+
+.standing-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.standing-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.standing-time.is-racing {
+  color: var(--hud-muted);
+  font-weight: 400;
 }
 
 .results-tag {

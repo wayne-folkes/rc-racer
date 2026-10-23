@@ -9,11 +9,17 @@
     <div id="app"></div>
     <div id="banner" class="banner" aria-live="assertive" hidden></div>
     <div id="hud" class="hud">
-      <div class="hud-panel">
-        <div class="hud-row"><span class="hud-label">Lap</span><span id="hud-lap">1 / 3</span></div>
-        <div class="hud-row"><span class="hud-label">Time</span><span id="hud-time">0:00.00</span></div>
-        <div class="hud-row"><span class="hud-label">Lap time</span><span id="hud-lap-time">0:00.00</span></div>
-        <div class="hud-row"><span class="hud-label">Best</span><span id="hud-best">--</span></div>
+      <div class="hud-stack">
+        <div class="hud-panel">
+          <div class="hud-row"><span class="hud-label">Lap</span><span id="hud-lap">1 / 3</span></div>
+          <div class="hud-row"><span class="hud-label">Time</span><span id="hud-time">0:00.00</span></div>
+          <div class="hud-row"><span class="hud-label">Lap time</span><span id="hud-lap-time">0:00.00</span></div>
+          <div class="hud-row"><span class="hud-label">Best</span><span id="hud-best">--</span></div>
+        </div>
+        <div class="hud-panel hud-position">
+          <span id="hud-position" class="hud-position-ordinal">1st</span>
+          <span id="hud-position-total" class="hud-position-total">/ 4</span>
+        </div>
       </div>
       <div class="hud-panel hud-speed"><span id="hud-speed">0</span><span class="hud-label">km/h</span></div>
     </div>
@@ -35,6 +41,10 @@
             <span id="results-best-badge" class="results-badge" hidden>New record!</span>
           </div>
           <span id="results-best-record" class="results-record"></span>
+        </div>
+        <div class="results-stat">
+          <span class="results-label">Standings</span>
+          <ol id="results-standings" class="results-standings"></ol>
         </div>
         <ol id="results-laps" class="results-laps"></ol>
         <button id="results-again" class="results-button" type="button">Race again</button>

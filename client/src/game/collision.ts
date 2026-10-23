@@ -35,3 +35,34 @@ export function collideWithWalls(car: CarState, track: TrackPath): { proj: Proje
   proj = track.project(car.x, car.z);
   return { proj, hit: into > 0 };
 }
+
+/** Centre-to-centre distance at which two cars touch. Cars are treated as equal-mass circles. */
+export const CAR_SPACING = 2;
+const CAR_RESTITUTION = 0.3;
+
+/** Separates two overlapping cars and bounces them apart. Returns whether they touched. */
+export function collideCars(a: CarState, b: CarState): boolean {
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const dist = Math.hypot(dx, dz);
+  if (dist >= CAR_SPACING || dist === 0) return false;
+
+  const nx = dx / dist;
+  const nz = dz / dist;
+  const push = (CAR_SPACING - dist) / 2;
+  a.x -= nx * push;
+  a.z -= nz * push;
+  b.x += nx * push;
+  b.z += nz * push;
+
+  // Closing speed along the line between them; only bounce if they're moving together.
+  const closing = (b.vx - a.vx) * nx + (b.vz - a.vz) * nz;
+  if (closing < 0) {
+    const j = (-(1 + CAR_RESTITUTION) * closing) / 2;
+    a.vx -= j * nx;
+    a.vz -= j * nz;
+    b.vx += j * nx;
+    b.vz += j * nz;
+  }
+  return true;
+}

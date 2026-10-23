@@ -93,22 +93,40 @@ export class RaceProgress {
 }
 
 export type RacePhase = 'countdown' | 'racing' | 'finished';
+/** Events for the player's car (racer 0). */
 export type RaceEvent = 'go' | 'lap' | 'finalLap' | 'finish';
 
+/**
+ * A race between several cars. Racer 0 is the player; the race is "finished" once the player
+ * crosses the line, but the clock keeps running so the other cars can still finish.
+ */
 export class Race {
   phase: RacePhase = 'countdown';
   /** Seconds left in the countdown. */
   countdown = COUNTDOWN_SECONDS;
   /** Race clock, starting at GO. */
   clock = 0;
-  finishTime: number | null = null;
-  readonly player: RaceProgress;
+  readonly racers: RaceProgress[];
+  /** Race time at which each racer finished, or null while still racing. */
+  readonly finishTimes: (number | null)[];
+  private readonly distances: number[];
 
   constructor(
     trackLength: number,
+    racerCount = 1,
     readonly totalLaps = TOTAL_LAPS,
   ) {
-    this.player = new RaceProgress(trackLength);
+    this.racers = Array.from({ length: racerCount }, () => new RaceProgress(trackLength));
+    this.finishTimes = this.racers.map(() => null);
+    this.distances = this.racers.map(() => 0);
+  }
+
+  get player(): RaceProgress {
+    return this.racers[0];
+  }
+
+  get finishTime(): number | null {
+    return this.finishTimes[0];
   }
 
   /** Cars can't move until GO. */
@@ -121,25 +139,62 @@ export class Race {
     return Math.min(this.totalLaps, this.player.lapsCompleted + 1);
   }
 
-  update(dt: number, playerDistance: number): RaceEvent[] {
+  /** Distance covered towards the finish; for rubber-banding and positions. */
+  progress(racer: number): number {
+    return this.racers[racer].progress(this.distances[racer]);
+  }
+
+  /** Racer indices in race order: finishers by time, then everyone else by distance covered. */
+  standings(): number[] {
+    return this.racers
+      .map((_, i) => i)
+      .sort((a, b) => {
+        const fa = this.finishTimes[a];
+        const fb = this.finishTimes[b];
+        if (fa !== null || fb !== null) {
+          if (fa === null) return 1;
+          if (fb === null) return -1;
+          return fa - fb;
+        }
+        return this.progress(b) - this.progress(a);
+      });
+  }
+
+  /** 1-based race position of a racer. */
+  position(racer: number): number {
+    return this.standings().indexOf(racer) + 1;
+  }
+
+  /** `distances[i]` is racer i's distance along the track. */
+  update(dt: number, distances: number[]): RaceEvent[] {
     if (this.phase === 'countdown') {
       this.countdown -= dt;
-      this.player.update(playerDistance, 0);
+      this.trackRacers(distances, 0);
       if (this.countdown > 0) return [];
       this.countdown = 0;
       this.phase = 'racing';
       return ['go'];
     }
-    if (this.phase === 'finished') return [];
 
     this.clock += dt;
-    if (this.player.update(playerDistance, this.clock) !== 'lap') return [];
-    if (this.player.lapsCompleted >= this.totalLaps) {
+    const playerLapped = this.trackRacers(distances, this.clock)[0];
+    if (this.phase === 'finished' || !playerLapped) return [];
+    if (this.finishTimes[0] !== null) {
       this.phase = 'finished';
-      this.finishTime = this.clock;
       return ['finish'];
     }
     return this.player.lapsCompleted === this.totalLaps - 1 ? ['lap', 'finalLap'] : ['lap'];
+  }
+
+  /** Updates every racer's progress; returns which of them completed a lap this step. */
+  private trackRacers(distances: number[], clock: number): boolean[] {
+    return this.racers.map((racer, i) => {
+      this.distances[i] = distances[i];
+      if (this.finishTimes[i] !== null) return false;
+      const lapped = racer.update(distances[i], clock) === 'lap';
+      if (lapped && racer.lapsCompleted >= this.totalLaps) this.finishTimes[i] = clock;
+      return lapped;
+    });
   }
 }
 
