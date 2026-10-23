@@ -534,7 +534,21 @@ a.results-button {
   box-shadow: inset 0 0 0 2px var(--hud-accent);
 }
 
-.easy-hint {
+/* Two toggles side by side, with one line of explanation under them. */
+.toggle-row {
+  display: flex;
+  gap: 8px;
+}
+
+.toggle-row .results-button,
+.toggle-row .results-button + .results-button {
+  flex: 1;
+  margin-top: 0;
+  padding: 10px 8px;
+  font-size: 16px;
+}
+
+.toggle-hint {
   margin: 8px 0 14px;
   color: var(--hud-muted);
   font-size: 13px;
@@ -578,6 +592,11 @@ a.results-button {
   display: flex;
   gap: 8px;
   margin: 0 0 14px;
+}
+
+/* Stacked groups of tabs sit a little closer than a group and the table below it. */
+.records-tabs + .records-tabs {
+  margin-top: -6px;
 }
 
 .records-tab {

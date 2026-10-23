@@ -1,5 +1,5 @@
 import { DEFAULT_TUNING, type CarTuning } from './carPhysics';
-import { TRACKS, type TrackDef } from './tracks';
+import { reverseTrack, TRACKS, type TrackDef } from './tracks';
 import { DEFAULT_VEHICLE, VEHICLES, type VehicleId } from './vehicles';
 
 // A season: one race per track, prize money by finishing position, upgrades bought between
@@ -54,18 +54,21 @@ export interface SeasonState {
   vehicle: VehicleId;
   /** Easy mode: the player starts 2nd and the opponents are a little slower. */
   easy: boolean;
+  /** Every track is driven the other way round. */
+  reverse: boolean;
   levels: Record<UpgradeKind, number>;
   continuesLeft: number;
   results: RaceResult[];
   status: SeasonStatus;
 }
 
-export function newSeasonState(vehicle: VehicleId = DEFAULT_VEHICLE, easy = false): SeasonState {
+export function newSeasonState(vehicle: VehicleId = DEFAULT_VEHICLE, easy = false, reverse = false): SeasonState {
   return {
     round: 0,
     money: 0,
     vehicle,
     easy,
+    reverse,
     levels: { engine: 0, tires: 0, battery: 0 },
     continuesLeft: CONTINUES,
     results: [],
@@ -88,11 +91,20 @@ export function upgradedTuning(levels: Record<UpgradeKind, number>, base: CarTun
 export class Season {
   state: SeasonState;
 
+  /** The same tracks driven the other way, made the first time a reverse season asks for them. */
+  private reversedTracks: TrackDef[] | null = null;
+
   constructor(
-    readonly tracks: TrackDef[] = TRACKS,
+    private readonly forwardTracks: TrackDef[] = TRACKS,
     saved?: SeasonState,
   ) {
-    this.state = saved && saved.round < tracks.length ? saved : newSeasonState();
+    this.state = saved && saved.round < forwardTracks.length ? saved : newSeasonState();
+  }
+
+  /** The tracks this season runs on, in race order: the circuit as it is, or all of it driven backwards. */
+  get tracks(): TrackDef[] {
+    if (!this.state.reverse) return this.forwardTracks;
+    return (this.reversedTracks ??= this.forwardTracks.map(reverseTrack));
   }
 
   get track(): TrackDef {
@@ -167,8 +179,8 @@ export class Season {
     return true;
   }
 
-  /** Starts a fresh season from the first track, in the chosen vehicle and mode. */
-  restart(vehicle: VehicleId = DEFAULT_VEHICLE, easy = false): void {
-    this.state = newSeasonState(vehicle, easy);
+  /** Starts a fresh season from the first track, in the chosen vehicle and modes. */
+  restart(vehicle: VehicleId = DEFAULT_VEHICLE, easy = false, reverse = false): void {
+    this.state = newSeasonState(vehicle, easy, reverse);
   }
 }

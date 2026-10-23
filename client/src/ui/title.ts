@@ -1,7 +1,7 @@
 import { formatTime } from '../game/race';
 import { loadRecords } from '../game/records';
-import { TRACKS } from '../game/tracks';
-import { VEHICLE_IDS, VEHICLES, type VehicleId } from '../game/vehicles';
+import { REVERSED_TRACKS, TRACKS } from '../game/tracks';
+import { DEFAULT_VEHICLE, VEHICLE_IDS, VEHICLES, type VehicleId } from '../game/vehicles';
 import { BackCard, byId, type MenuCard } from './card';
 
 // The title screen, and the Records panel it opens. Records are read from storage each time the
@@ -75,39 +75,52 @@ export class TitleCard implements MenuCard {
 }
 
 /**
- * One row per track: the best race and best lap in the chosen vehicle, or a dash where there's no
- * time yet. A button per vehicle switches between them.
+ * One row per track: the best race and best lap in the chosen vehicle and direction, or a dash where
+ * there's no time yet. Buttons switch between vehicles, and between forward and reverse.
  */
 export class RecordsCard extends BackCard {
   private readonly list = byId('records-list');
-  private readonly tabs = new Map<VehicleId, HTMLButtonElement>();
+  private readonly vehicleTabs = new Map<VehicleId, HTMLButtonElement>();
+  private readonly directionTabs = new Map<boolean, HTMLButtonElement>();
+  private vehicle: VehicleId = DEFAULT_VEHICLE;
+  private reverse = false;
 
   constructor(
     onBack: () => void,
-    /** The vehicle being driven this season, which the card opens on. */
-    private readonly currentVehicle: () => VehicleId,
+    /** The vehicle and direction of this season, which the card opens on. */
+    private readonly current: () => { vehicle: VehicleId; reverse: boolean },
   ) {
     super('records', 'records-back', onBack);
-    const tabs = byId('records-tabs');
-    for (const id of VEHICLE_IDS) {
+    const tab = (group: string, label: string, onClick: () => void) => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'records-tab';
-      button.textContent = VEHICLES[id].name;
-      button.addEventListener('click', () => this.show(id));
-      tabs.append(button);
-      this.tabs.set(id, button);
+      button.textContent = label;
+      button.addEventListener('click', onClick);
+      byId(group).append(button);
+      return button;
+    };
+    for (const id of VEHICLE_IDS) {
+      this.vehicleTabs.set(id, tab('records-tabs', VEHICLES[id].name, () => this.show(id, this.reverse)));
+    }
+    for (const reverse of [false, true]) {
+      this.directionTabs.set(reverse, tab('records-directions', reverse ? 'Reverse' : 'Forward', () => this.show(this.vehicle, reverse)));
     }
   }
 
   refresh(): void {
-    this.show(this.currentVehicle());
+    const { vehicle, reverse } = this.current();
+    this.show(vehicle, reverse);
   }
 
-  private show(vehicle: VehicleId): void {
-    for (const [id, button] of this.tabs) button.setAttribute('aria-pressed', String(id === vehicle));
-    const rows = TRACKS.map((def) => {
-      const { bestRace, bestLap } = loadRecords(vehicle, def.id);
+  private show(vehicle: VehicleId, reverse: boolean): void {
+    this.vehicle = vehicle;
+    this.reverse = reverse;
+    for (const [id, button] of this.vehicleTabs) button.setAttribute('aria-pressed', String(id === vehicle));
+    for (const [isReverse, button] of this.directionTabs) button.setAttribute('aria-pressed', String(isReverse === reverse));
+    // The reversed tracks are in the same order, so row i is the same road either way round.
+    const rows = TRACKS.map((def, i) => {
+      const { bestRace, bestLap } = loadRecords(vehicle, (reverse ? REVERSED_TRACKS[i] : def).id);
       return recordRow(def.name, bestRace === null ? '—' : formatTime(bestRace), bestLap === null ? '—' : formatTime(bestLap));
     });
     this.list.replaceChildren(recordRow('Track', 'Race', 'Lap', true), ...rows);

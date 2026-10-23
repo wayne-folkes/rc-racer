@@ -111,10 +111,17 @@
         <h2 id="vehicle-heading" class="results-title">Choose your ride</h2>
         <p class="results-subtitle">Everyone on the track drives the same one.</p>
         <ul id="vehicle-options" class="garage-upgrades"></ul>
-        <button id="vehicle-easy" class="results-button results-button-secondary" type="button" aria-pressed="false">
-          Easy mode: Off
-        </button>
-        <p class="easy-hint">Start 2nd, and the opponents are a little slower.</p>
+        <div class="toggle-row">
+          <button id="vehicle-easy" class="results-button results-button-secondary" type="button" aria-pressed="false">
+            Easy mode: Off
+          </button>
+          <button id="vehicle-reverse" class="results-button results-button-secondary" type="button" aria-pressed="false">
+            Reverse: Off
+          </button>
+        </div>
+        <p class="toggle-hint">
+          Easy: you start 2nd and the opponents are a little slower. Reverse: every track is driven the other way.
+        </p>
         <button id="vehicle-back" class="results-button results-button-secondary" type="button">Back</button>
       </div>
     </div>
@@ -150,6 +157,7 @@
       <div class="results-card" role="dialog" aria-labelledby="records-heading">
         <h2 id="records-heading" class="results-title">Records</h2>
         <div id="records-tabs" class="records-tabs" role="group" aria-label="Vehicle"></div>
+        <div id="records-directions" class="records-tabs" role="group" aria-label="Direction"></div>
         <ol id="records-list" class="records-list"></ol>
         <button id="records-back" class="results-button results-button-secondary" type="button">Back</button>
       </div>
@@ -196,8 +204,8 @@
         <h3 class="howto-head">Season</h3>
         <p class="howto-text">
           Pick a Buggy or a Monster Truck when you start a season: everyone on the track drives the same one. Easy
-          mode starts you 2nd and makes the opponents a little slower. Finish in the top three to go through to the
-          next round. Prize money buys upgrades in the garage between races.
+          mode starts you 2nd and makes the opponents a little slower. Reverse drives every track the other way
+          round, with its own records. Finish in the top three to go through to the next round. Prize money buys upgrades in the garage between races.
           You get 2 continues to retry a race you miss.
         </p>
         <button id="howto-back" class="results-button results-button-secondary" type="button">Back</button>

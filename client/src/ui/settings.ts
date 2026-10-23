@@ -1,7 +1,7 @@
 import type { Sound } from '../game/audio';
 import { clearAllRecords } from '../game/records';
 import { clearSeason } from '../game/seasonStorage';
-import { TRACKS } from '../game/tracks';
+import { ALL_TRACKS } from '../game/tracks';
 import { byId, type MenuCard } from './card';
 
 // Sound on or off, the volume, and resetting all progress. Opened from the title screen and from
@@ -92,7 +92,7 @@ export class SettingsCard implements MenuCard {
   /** Wipes the saved season and every track's records. Sound and volume are kept. */
   private reset(): void {
     clearSeason();
-    clearAllRecords(TRACKS.map((def) => def.id));
+    clearAllRecords(ALL_TRACKS.map((def) => def.id));
     this.askReset(false);
     this.actions.progressReset();
   }
