@@ -1,7 +1,6 @@
 import { AiDriver, rubberBand, type AiSkill, type Obstacle } from './aiDriver';
 import {
   createCar,
-  DEFAULT_TUNING,
   stepCar,
   type CarInput,
   type CarState,
@@ -14,6 +13,7 @@ import { Race, TOTAL_LAPS, type RaceEvent } from './race';
 import { buildRacingLine, type RacingLine } from './racingLine';
 import { gridPosition, OPPONENTS, PLAYER, type Opponent, type RacerInfo } from './racers';
 import type { Projection, TrackPath } from './trackPath';
+import { DEFAULT_VEHICLE, VEHICLES, type VehicleId } from './vehicles';
 
 // Everything that happens in a race, without rendering: cars, AI, collisions and race rules.
 // The game renders it; tests run it directly.
@@ -22,11 +22,8 @@ export const NO_INPUT: CarInput = { throttle: 0, steer: 0, handbrake: false };
 
 /** Peak spin rate (rad/s) when hit; it winds down over the spin. */
 const SPIN_RATE = 11;
-/** Extra drag (1/s) while driving through a puddle. */
-const PUDDLE_DRAG = 1.6;
 const BOOST_SPEED = 1.35;
 const BOOST_ACCEL = 1.8;
-const SLICK_GRIP = 0.1;
 const SLICK_TURN = 0.6;
 /** AI fires missiles at cars this far ahead along the track (m)... */
 const AI_MISSILE_RANGE: [number, number] = [4, 35];
@@ -40,8 +37,8 @@ export function effectiveTuning(base: CarTuning, status: RacerStatus): CarTuning
   if (status.slick > 0) {
     t = {
       ...t,
-      grip: t.grip * SLICK_GRIP,
-      driftGrip: t.driftGrip * SLICK_GRIP,
+      grip: t.grip * t.slickGrip,
+      driftGrip: t.driftGrip * t.slickGrip,
       maxTurnRate: t.maxTurnRate * SLICK_TURN,
     };
   }
@@ -63,7 +60,9 @@ export interface WorldOptions {
   layout?: TrackLayout;
   /** Seed for item boxes and oil, so races are repeatable. */
   seed?: number;
-  /** The player's car handling, e.g. with upgrades bought between races. */
+  /** What every car on the track drives: the baseline handling for the player, the opponents and the racing line. */
+  vehicle?: VehicleId;
+  /** The player's car handling, e.g. with upgrades bought between races. Defaults to the vehicle's own. */
   playerTuning?: CarTuning;
   /** Multiplier on every opponent's pace; the season raises it round by round. */
   opponentPace?: number;
@@ -91,9 +90,10 @@ export class RaceWorld {
     readonly track: TrackPath,
     private readonly options: WorldOptions = {},
   ) {
-    this.line = buildRacingLine(track);
+    const vehicleTuning = VEHICLES[options.vehicle ?? DEFAULT_VEHICLE].tuning;
+    this.line = buildRacingLine(track, vehicleTuning);
     const opponents = options.opponents ?? OPPONENTS;
-    this.playerTuning = options.playerTuning ?? DEFAULT_TUNING;
+    this.playerTuning = options.playerTuning ?? vehicleTuning;
     const playerDriver = options.autopilot
       ? new AiDriver(track, this.line, options.autopilot, this.playerTuning)
       : null;
@@ -103,7 +103,7 @@ export class RaceWorld {
       ...opponents.map((o) => ({
         info: o,
         car: gridPosition(track, o.gridSlot),
-        driver: new AiDriver(track, this.line, { ...o.skill, pace: o.skill.pace * opponentPace }),
+        driver: new AiDriver(track, this.line, { ...o.skill, pace: o.skill.pace * opponentPace }, vehicleTuning),
       })),
     ];
     this.race = this.newRace();
@@ -181,7 +181,7 @@ export class RaceWorld {
       else stepCar(racer.car, input, dt, effectiveTuning(base, status));
       if (status.spin > 0) racer.car.heading += SPIN_RATE * (status.spin / SPIN_TIME) * dt;
       if (status.inPuddle) {
-        const keep = Math.exp(-PUDDLE_DRAG * dt);
+        const keep = Math.exp(-base.puddleDrag * dt);
         racer.car.vx *= keep;
         racer.car.vz *= keep;
       }

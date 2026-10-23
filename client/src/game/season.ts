@@ -1,5 +1,6 @@
 import { DEFAULT_TUNING, type CarTuning } from './carPhysics';
 import { TRACKS, type TrackDef } from './tracks';
+import { DEFAULT_VEHICLE, VEHICLES, type VehicleId } from './vehicles';
 
 // A season: one race per track, prize money by finishing position, upgrades bought between
 // races, opponents getting quicker each round, and top three or it's game over. Pure state, so
@@ -47,16 +48,19 @@ export interface SeasonState {
   /** Index into the season's tracks of the race being run or about to be run. */
   round: number;
   money: number;
+  /** What the player drives all season. */
+  vehicle: VehicleId;
   levels: Record<UpgradeKind, number>;
   continuesLeft: number;
   results: RaceResult[];
   status: SeasonStatus;
 }
 
-export function newSeasonState(): SeasonState {
+export function newSeasonState(vehicle: VehicleId = DEFAULT_VEHICLE): SeasonState {
   return {
     round: 0,
     money: 0,
+    vehicle,
     levels: { engine: 0, tires: 0, battery: 0 },
     continuesLeft: CONTINUES,
     results: [],
@@ -105,7 +109,7 @@ export class Season {
   }
 
   get playerTuning(): CarTuning {
-    return upgradedTuning(this.state.levels);
+    return upgradedTuning(this.state.levels, VEHICLES[this.state.vehicle].tuning);
   }
 
   /** Price of the next level of an upgrade, or null when it's maxed out. */
@@ -158,8 +162,8 @@ export class Season {
     return true;
   }
 
-  /** Starts a fresh season from the first track. */
-  restart(): void {
-    this.state = newSeasonState();
+  /** Starts a fresh season from the first track, in the chosen vehicle. */
+  restart(vehicle: VehicleId = DEFAULT_VEHICLE): void {
+    this.state = newSeasonState(vehicle);
   }
 }
