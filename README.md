@@ -17,6 +17,11 @@ onto the track, N to restart the race (or Enter on the results screen).
 `npm test` runs the unit tests (handling, track maths, collisions, race rules, AI, and full
 four-car races on the demo track). `npm run build` type-checks and builds to `client/dist`.
 
+## Deploy
+
+Pushes to `main` run CI (`.github/workflows/ci.yml`: unit tests and build) and deploy to Vercel,
+which builds `client/` as a static site (`vercel.json`). Pull requests get preview deployments.
+
 ## Layout
 
 - `client/src/main.ts`: renderer, lights, fixed-timestep game loop, HUD.
