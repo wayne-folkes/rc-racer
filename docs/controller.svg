@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520" role="img" aria-labelledby="t d">
+  <title id="t">RC Racer gamepad controls</title>
+  <desc id="d">A gamepad with callouts: left stick and d-pad steer, right trigger and A give gas, left trigger and X brake or reverse, either bumper is the handbrake, B uses an item, Y resets the car, Back restarts the race, Start pauses.</desc>
+
+  <style>
+    text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+    .cap { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; fill: #94a3b8; }
+    .act { font-size: 17px; font-weight: 800; fill: #f1f5f9; }
+    .row { font-size: 16px; font-weight: 700; fill: #f1f5f9; }
+    .note { font-size: 13px; font-weight: 600; fill: #94a3b8; }
+    .box { fill: #1e293b; stroke: #334155; stroke-width: 1.5; }
+    .lead { fill: none; stroke: #facc15; stroke-width: 1.75; }
+    .dot { fill: #facc15; }
+    .shell { fill: #1e293b; stroke: #475569; stroke-width: 6; }
+    .shellfill { fill: #1e293b; }
+    .part { fill: #0b1120; stroke: #facc15; stroke-width: 2; }
+    .idle { fill: #0b1120; stroke: #334155; stroke-width: 2; opacity: 0.6; }
+    .badge { font-size: 12px; font-weight: 900; text-anchor: middle; }
+  </style>
+
+  <rect width="960" height="520" rx="18" fill="#0f172a" />
+
+  <!-- Controller: outline strokes first, then fills on top so the shapes read as one body -->
+  <g class="shell">
+    <rect x="320" y="185" width="320" height="150" rx="60" />
+    <rect x="300" y="290" width="95" height="170" rx="45" transform="rotate(12 347 375)" />
+    <rect x="565" y="290" width="95" height="170" rx="45" transform="rotate(-12 613 375)" />
+  </g>
+  <g class="shellfill">
+    <rect x="320" y="185" width="320" height="150" rx="60" />
+    <rect x="300" y="290" width="95" height="170" rx="45" transform="rotate(12 347 375)" />
+    <rect x="565" y="290" width="95" height="170" rx="45" transform="rotate(-12 613 375)" />
+  </g>
+
+  <!-- Triggers and bumpers -->
+  <rect class="part" x="355" y="135" width="60" height="38" rx="12" />
+  <rect class="part" x="545" y="135" width="60" height="38" rx="12" />
+  <rect class="part" x="335" y="173" width="100" height="18" rx="9" />
+  <rect class="part" x="525" y="173" width="100" height="18" rx="9" />
+
+  <!-- Left stick, d-pad -->
+  <circle class="part" cx="395" cy="240" r="26" />
+  <circle cx="395" cy="240" r="15" fill="#1e293b" stroke="#facc15" stroke-width="2" />
+  <path class="part" d="M414 280h22v9h9v22h-9v9h-22v-9h-9v-22h9z" />
+
+  <!-- Right stick: not used -->
+  <circle class="idle" cx="535" cy="303" r="24" />
+  <circle cx="535" cy="303" r="14" fill="#1e293b" stroke="#334155" stroke-width="2" opacity="0.6" />
+
+  <!-- Back and Start -->
+  <rect class="part" x="446" y="229" width="18" height="12" rx="6" />
+  <rect class="part" x="496" y="229" width="18" height="12" rx="6" />
+
+  <!-- Face buttons -->
+  <circle class="part" cx="575" cy="208" r="13" /><text class="badge" x="575" y="212.5" fill="#facc15">Y</text>
+  <circle class="part" cx="551" cy="232" r="13" /><text class="badge" x="551" y="236.5" fill="#60a5fa">X</text>
+  <circle class="part" cx="599" cy="232" r="13" /><text class="badge" x="599" y="236.5" fill="#f87171">B</text>
+  <circle class="part" cx="575" cy="256" r="13" /><text class="badge" x="575" y="260.5" fill="#4ade80">A</text>
+
+  <!-- Leader lines (left) -->
+  <polyline class="lead" points="264,62 385,62 385,140" /><circle class="dot" cx="385" cy="140" r="4" />
+  <polyline class="lead" points="264,128 340,128 340,181" /><circle class="dot" cx="340" cy="181" r="4" />
+  <polyline class="lead" points="264,204 395,204 395,222" /><circle class="dot" cx="395" cy="222" r="4" />
+  <polyline class="lead" points="264,284 425,284" /><circle class="dot" cx="425" cy="284" r="4" />
+  <polyline class="lead" points="264,428 455,428 455,238" /><circle class="dot" cx="455" cy="238" r="4" />
+
+  <!-- Leader lines (right) -->
+  <polyline class="lead" points="696,62 575,62 575,140" /><circle class="dot" cx="575" cy="140" r="4" />
+  <polyline class="lead" points="696,128 620,128 620,181" /><circle class="dot" cx="620" cy="181" r="4" />
+  <polyline class="lead" points="696,232 618,232" /><circle class="dot" cx="616" cy="232" r="4" />
+  <polyline class="lead" points="696,428 505,428 505,238" /><circle class="dot" cx="505" cy="238" r="4" />
+
+  <!-- Callouts (left) -->
+  <g>
+    <rect class="box" x="24" y="34" width="240" height="56" rx="10" />
+    <text class="cap" x="40" y="54">LEFT TRIGGER · LT / L2</text><text class="act" x="40" y="77">Brake / reverse</text>
+
+    <rect class="box" x="24" y="100" width="240" height="56" rx="10" />
+    <text class="cap" x="40" y="120">LEFT BUMPER · LB / L1</text><text class="act" x="40" y="143">Handbrake (slide)</text>
+
+    <rect class="box" x="24" y="176" width="240" height="56" rx="10" />
+    <text class="cap" x="40" y="196">LEFT STICK</text><text class="act" x="40" y="219">Steer · move in menus</text>
+
+    <rect class="box" x="24" y="256" width="240" height="56" rx="10" />
+    <text class="cap" x="40" y="276">D-PAD</text><text class="act" x="40" y="299">Steer · move in menus</text>
+
+    <rect class="box" x="24" y="400" width="240" height="56" rx="10" />
+    <text class="cap" x="40" y="420">BACK · SELECT / SHARE</text><text class="act" x="40" y="443">Restart race</text>
+  </g>
+
+  <!-- Callouts (right) -->
+  <g>
+    <rect class="box" x="696" y="34" width="240" height="56" rx="10" />
+    <text class="cap" x="712" y="54">RIGHT TRIGGER · RT / R2</text><text class="act" x="712" y="77">Gas</text>
+
+    <rect class="box" x="696" y="100" width="240" height="56" rx="10" />
+    <text class="cap" x="712" y="120">RIGHT BUMPER · RB / R1</text><text class="act" x="712" y="143">Handbrake (slide)</text>
+
+    <rect class="box" x="696" y="176" width="240" height="150" rx="10" />
+    <text class="cap" x="712" y="196">FACE BUTTONS</text>
+    <circle cx="722" cy="218" r="10" fill="#0b1120" stroke="#4ade80" stroke-width="2" /><text class="badge" x="722" y="222.5" fill="#4ade80">A</text>
+    <text class="row" x="744" y="224">Gas · select in menus</text>
+    <circle cx="722" cy="248" r="10" fill="#0b1120" stroke="#f87171" stroke-width="2" /><text class="badge" x="722" y="252.5" fill="#f87171">B</text>
+    <text class="row" x="744" y="254">Use item</text>
+    <circle cx="722" cy="278" r="10" fill="#0b1120" stroke="#60a5fa" stroke-width="2" /><text class="badge" x="722" y="282.5" fill="#60a5fa">X</text>
+    <text class="row" x="744" y="284">Brake / reverse</text>
+    <circle cx="722" cy="308" r="10" fill="#0b1120" stroke="#facc15" stroke-width="2" /><text class="badge" x="722" y="312.5" fill="#facc15">Y</text>
+    <text class="row" x="744" y="314">Reset onto the track</text>
+
+    <rect class="box" x="696" y="400" width="240" height="56" rx="10" />
+    <text class="cap" x="712" y="420">START · OPTIONS</text><text class="act" x="712" y="443">Pause</text>
+  </g>
+
+  <text class="note" x="480" y="494" text-anchor="middle">The right stick isn't used · the pad rumbles when you're hit</text>
+</svg>
