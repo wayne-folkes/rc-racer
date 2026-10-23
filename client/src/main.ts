@@ -32,6 +32,7 @@ import { buildGridLabel } from './game/gridLabel';
 import { TouchControls } from './game/touch';
 import type { VehicleId } from './game/vehicles';
 import { blendCar, poseOf, type Pose } from './game/renderPose';
+import { Minimap } from './ui/minimap';
 import { createMeteors, type MeteorScene } from './game/meteorScene';
 import { createWeather, type WeatherScene } from './game/weatherScene';
 import { NO_INPUT, RaceWorld, type Racer } from './game/world';
@@ -128,6 +129,7 @@ function persist(): void {
 let track: TrackPath;
 let world: RaceWorld;
 let itemScene: ItemScene;
+const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement);
 let weather: WeatherScene | null = null;
 let meteors: MeteorScene | null = null;
 let trackScene: Group | null = null;
@@ -314,6 +316,7 @@ function buildRace(def: TrackDef, mode: BuildMode): void {
   // progress, which would read as 1st.
   gridLabel = buildGridLabel(ordinal(world.racers[0].info.gridSlot + 1));
   carViews[0].model.root.add(gridLabel);
+  minimap.setTrack(track);
   weather = createWeather(def.theme.weather, raceCount);
   if (weather) scene.add(weather.root);
   meteors = def.theme.meteors ? createMeteors(track, def.theme.ground, raceCount) : null;
@@ -1096,6 +1099,12 @@ function frame(now: number): void {
     model.sync(drawnCar(i), simDt);
   });
   followCamera.update(drawnCar(0), simDt);
+  minimap.update(
+    carViews.map(({ racer }, i) => {
+      const { x, z } = drawnCar(i);
+      return { x, z, color: racer.info.color };
+    }),
+  );
   sun.position.set(world.player.x + 30, 60, world.player.z + 20);
   sun.target.position.set(world.player.x, 0, world.player.z);
   updateHud();

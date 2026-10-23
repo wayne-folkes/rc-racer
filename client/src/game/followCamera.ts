@@ -5,6 +5,8 @@ import type { CarState } from './carPhysics';
 const VIEW_HEIGHT = 36;
 /** Direction from the target to the camera: a fixed 3/4 view from the south-west. */
 const OFFSET = new Vector3(-0.55, 1.1, 1).normalize().multiplyScalar(120);
+/** The way the camera looks along the ground, as a unit vector: what points up the screen. */
+export const VIEW_FORWARD = { x: -OFFSET.x / Math.hypot(OFFSET.x, OFFSET.z), z: -OFFSET.z / Math.hypot(OFFSET.x, OFFSET.z) };
 /** Y rotation that turns an object's +Z face towards the camera. */
 export const FACE_CAMERA_YAW = Math.atan2(OFFSET.x, OFFSET.z);
 /** Seconds of velocity to look ahead, so you see more of the road you're heading into. */
