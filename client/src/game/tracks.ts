@@ -1,4 +1,4 @@
-import { DEMO_LAYOUT, pickupRow, type TrackLayout, type TrackSpot } from './items';
+import { DEMO_LAYOUT, hazardZones, pickupRow, type TrackLayout, type TrackSpot } from './items';
 import { RAMP_LENGTH } from './jumps';
 import { SPACE_TRACKS } from './spaceTracks';
 import { DEMO_TRACK, TrackPath, type Point } from './trackPath';
@@ -20,6 +20,8 @@ export interface TrackTheme {
   /** Small pools dotted around the infield and outside the track. */
   ponds?: PondStyle;
   weather?: Weather;
+  /** Meteors now and then hit the ground beside the track and leave craters. */
+  meteors?: boolean;
 }
 
 export interface TrackDef {
@@ -54,11 +56,8 @@ export const TRACKS: TrackDef[] = [
       [30, 18], [4, 26], [-26, 34], [-58, 36], [-80, 24], [-86, 0], [-80, -24],
     ]),
     layout: {
-      hazards: [
-        { kind: 'puddle', at: 0.2, lateral: -2.2, radius: 2.4 },
-        { kind: 'oil', at: 0.36, lateral: 3.6, radius: 1.6 },
-        { kind: 'puddle', at: 0.86, lateral: -1.5, radius: 2.2 },
-      ],
+      hazards: [],
+      hazardZones: hazardZones(6.5, [0.212, 0.36, 0.86]),
       pickups: [...pickupRow(0.12, ['missile', 'bomb', 'missile']), ...pickupRow(0.66, ['bomb', 'missile', 'bomb'])],
       boostPads: [
         { at: 0.04, lateral: -2.4 },
@@ -81,13 +80,8 @@ export const TRACKS: TrackDef[] = [
       [-44, 64], [-70, 50], [-78, 20], [-76, -14], [-72, -34],
     ]),
     layout: {
-      hazards: [
-        { kind: 'puddle', at: 0.12, lateral: -2, radius: 2.2 },
-        { kind: 'puddle', at: 0.33, lateral: 1.6, radius: 2 },
-        { kind: 'oil', at: 0.54, lateral: -1.8, radius: 1.6 },
-        { kind: 'puddle', at: 0.76, lateral: 2.6, radius: 2 },
-        { kind: 'oil', at: 0.86, lateral: -1.4, radius: 1.6 },
-      ],
+      hazards: [],
+      hazardZones: hazardZones(5.5, [0.135, 0.33, 0.54, 0.76, 0.86]),
       pickups: [...pickupRow(0.08, ['missile', 'bomb', 'missile']), ...pickupRow(0.5, ['bomb', 'missile', 'bomb'])],
       boostPads: [
         { at: 0.28, lateral: -2.2 },
@@ -109,11 +103,8 @@ export const TRACKS: TrackDef[] = [
       [-36, 30], [-50, 38], [-66, 40], [-76, 26], [-72, 2], [-62, -24],
     ]),
     layout: {
-      hazards: [
-        { kind: 'oil', at: 0.16, lateral: 3, radius: 1.4 },
-        { kind: 'puddle', at: 0.645, lateral: -2.2, radius: 1.8 },
-        { kind: 'oil', at: 0.88, lateral: -1.8, radius: 1.4 },
-      ],
+      hazards: [],
+      hazardZones: hazardZones(5, [0.03, 0.6, 0.955], 0.008),
       pickups: [...pickupRow(0.08, ['missile', 'bomb', 'missile']), ...pickupRow(0.62, ['bomb', 'missile', 'bomb'])],
       boostPads: [
         { at: 0.12, lateral: -2.4 },
@@ -146,6 +137,7 @@ export function reverseTrack(def: TrackDef): TrackDef {
     controlPoints: [first, ...rest.reverse()],
     layout: {
       hazards: def.layout.hazards.map(mirror),
+      hazardZones: def.layout.hazardZones?.map((zone) => ({ ...zone, at: wrap(1 - zone.at) })),
       pickups: def.layout.pickups.map(mirror),
       boostPads: def.layout.boostPads.map(mirror),
       ramps: def.layout.ramps?.map((ramp) => ({

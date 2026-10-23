@@ -21,10 +21,10 @@ The game opens on a title screen with Continue, New season, Records, Settings (s
 progress) and How to play. New season asks you to pick a circuit, then a Buggy or a Monster Truck, and
 everyone on the track drives the same one. Both circuits are open from the start and run four rounds:
 the Classic Cup (meadow, desert, lakeside, snow) and the Space Cup, which races over the Moon (Tranquility
-Run), Mars (Olympus Rally), Io (Pele Loop) and Europa (Conamara Run), each with its own scenery and weather. The buggy is quicker and sharper; the truck is a few percent slower
+Run), Mars (Olympus Rally), Io (Pele Loop) and Europa (Conamara Run), each with its own scenery and weather, and meteors that now and then crash in beside the track and leave craters. The buggy is quicker and sharper; the truck is a few percent slower
 and softer to steer, but its big tires shrug off oil and puddles. Easy mode, a switch on the same
 screen, starts you 2nd (instead of 4th) and makes the opponents a little slower. Reverse, a switch on the
-circuit screen, drives every track the other way round. Every circuit, vehicle and direction has its own records.
+circuit screen, drives every track the other way round. Every circuit, vehicle and direction has its own records. Oil and puddles are drawn at random within set stretches of road, so each race has them in different spots.
 
 `npm test` runs the unit tests (handling, track maths, collisions, race rules, AI, items, season
 rules, and full four-car races on every track). `npm run build` type-checks and builds to `client/dist`.
@@ -85,7 +85,7 @@ which builds `client/` as a static site (`vercel.json`). Pull requests get previ
 - `client/src/game/race.ts`: race rules: countdown, checkpoints, laps, standings.
 - `client/src/game/world.ts`: the whole race simulation (cars, AI, collisions, rules) without rendering.
 - `client/src/game/racingLine.ts`, `aiDriver.ts`, `racers.ts`: AI racing line, driving, opponents and grid.
-- `client/src/game/items.ts`: pickups, missiles, bombs, boost pads, oil and puddles, and the demo layout.
+- `client/src/game/items.ts`: pickups, missiles, bombs, boost pads, oil and puddles (placed at random within each track's hazard zones), and the demo layout.
 - `client/src/game/jumps.ts`: ramps, car height and jumping. Airborne cars can't steer and pass over
   pickups, hazards, bombs and other cars.
 - `client/src/game/tracks.ts`, `spaceTracks.ts`: the circuits and their tracks, each with its layout and
@@ -99,7 +99,7 @@ which builds `client/` as a static site (`vercel.json`). Pull requests get previ
   merged into one set of controls.
 - `client/src/game/audio.ts`: engine notes and sound effects, synthesized with the Web Audio API (no
   sound files).
-- `client/src/game/carModel.ts`, `trackScene.ts`, `itemScene.ts`, `weatherScene.ts`, `followCamera.ts`:
+- `client/src/game/carModel.ts`, `trackScene.ts`, `itemScene.ts`, `weatherScene.ts`, `meteorScene.ts`, `followCamera.ts`:
   visuals.
 
 ## Contributing

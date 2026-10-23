@@ -11,7 +11,16 @@ describe('rubberBand', () => {
     expect(rubberBand(-20)).toBeLessThan(1);
     expect(rubberBand(20)).toBeGreaterThan(1);
     expect(rubberBand(-1000)).toBeGreaterThanOrEqual(0.85);
-    expect(rubberBand(1000)).toBeLessThanOrEqual(1.05);
+    expect(rubberBand(1000)).toBeLessThanOrEqual(1.12);
+  });
+
+  it('pushes a car trailing the player harder in a normal race than in easy mode', () => {
+    expect(rubberBand(15)).toBeGreaterThan(rubberBand(15, true));
+    // A lead of a few car lengths earns the full push.
+    expect(rubberBand(40)).toBeCloseTo(1.12, 5);
+    expect(rubberBand(1000, true)).toBe(1.03);
+    // Cars ahead of the player ease off the same as before.
+    expect(rubberBand(-100)).toBe(0.92);
   });
 });
 

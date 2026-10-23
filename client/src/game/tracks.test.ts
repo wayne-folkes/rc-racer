@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ItemSystem } from './items';
 import { RAMP_LENGTH } from './jumps';
 import { buildRacingLine } from './racingLine';
 import { gridPosition, OPPONENTS, PLAYER, SLOT_LENGTH, SLOT_WIDTH, START_LINE_DEPTH } from './racers';
@@ -7,11 +8,22 @@ import { TrackPath } from './trackPath';
 import { NO_INPUT, RaceWorld } from './world';
 
 const DT = 1 / 120;
+/** How many different races' worth of random hazards each track is checked against. */
+const HAZARD_SEEDS = 40;
 
 describe.each(ALL_TRACKS)('$name', (def) => {
   const track = new TrackPath(def.controlPoints, def.halfWidth);
   const line = buildRacingLine(track);
   const n = track.points.length;
+
+  /** Where along the track every hazard lies: the fixed ones, then the zones' hazards as rolled in many races. */
+  const hazardDistances = () => {
+    const fixed = def.layout.hazards.map((h) => h.at * track.length);
+    const rolled = Array.from({ length: HAZARD_SEEDS }, (_, k) =>
+      new ItemSystem(track, 4, def.layout, k + 1).hazards.map((h) => track.project(h.x, h.z).distance),
+    );
+    return [...fixed, ...rolled.flat()];
+  };
 
   it('has no corner tighter than the road is wide', () => {
     for (let i = 0; i < n; i++) {
@@ -38,6 +50,20 @@ describe.each(ALL_TRACKS)('$name', (def) => {
     for (const spot of [...def.layout.pickups, ...def.layout.boostPads, ...def.layout.hazards]) {
       expect(Math.abs(spot.lateral)).toBeLessThanOrEqual(room);
     }
+    for (const zone of def.layout.hazardZones ?? []) expect(zone.room).toBeLessThanOrEqual(room);
+  });
+
+  it('keeps hazard zones apart, so each gets a hazard of its own', () => {
+    const zones = def.layout.hazardZones ?? [];
+    expect(zones.length + def.layout.hazards.length).toBeGreaterThanOrEqual(3);
+    for (const a of zones) {
+      for (const b of zones) {
+        if (a === b) continue;
+        const gap = Math.abs(a.at - b.at);
+        const clear = (Math.min(gap, 1 - gap) - a.reach - b.reach) * track.length;
+        expect(clear, 'metres between two zones').toBeGreaterThan(10);
+      }
+    }
   });
 
   it('fits every starting pad on the road and behind the start line', () => {
@@ -50,9 +76,19 @@ describe.each(ALL_TRACKS)('$name', (def) => {
     }
   });
 
+  it('never drops a hazard on a pickup or a boost pad', () => {
+    const spots = [...def.layout.pickups, ...def.layout.boostPads].map((spot) => spot.at * track.length);
+    for (const distance of hazardDistances()) {
+      for (const at of spots) {
+        const gap = Math.abs(distance - at);
+        expect(Math.min(gap, track.length - gap), 'metres from the nearest spot').toBeGreaterThan(4.5);
+      }
+    }
+  });
+
   it('only puts hazards where the racing line is steady enough to steer round them', () => {
-    for (const h of def.layout.hazards) {
-      const centre = Math.round(h.at * n);
+    for (const distance of hazardDistances()) {
+      const centre = Math.round((distance / track.length) * n);
       const reach = Math.round(20 / (track.length / n));
       const offsets = Array.from({ length: 2 * reach + 1 }, (_, k) => line.offsets[(centre - reach + k + n) % n]);
       expect(Math.max(...offsets) - Math.min(...offsets)).toBeLessThan(2.5);
@@ -72,16 +108,17 @@ describe.each(ALL_TRACKS)('$name', (def) => {
       const offsets = window.map((w) => w.offset);
       expect(Math.max(...offsets) - Math.min(...offsets)).toBeLessThan(2.5);
 
-      // Nothing sits on the ramp itself.
-      for (const spot of [...def.layout.pickups, ...def.layout.boostPads, ...def.layout.hazards]) {
-        const along = (((spot.at * track.length - foot) % track.length) + track.length) % track.length;
+      // Nothing sits on the ramp itself, wherever a zone's hazard lands.
+      const spots = [...def.layout.pickups, ...def.layout.boostPads].map((spot) => spot.at * track.length);
+      for (const at of [...spots, ...hazardDistances()]) {
+        const along = (((at - foot) % track.length) + track.length) % track.length;
         expect(along > RAMP_LENGTH + 1 && along < track.length - 3).toBe(true);
       }
     }
   });
 
-  it('can be raced by the full field with nobody stuck', () => {
-    const world = new RaceWorld(track, { autopilot: { pace: 0.9, steerGain: 2.4 }, layout: def.layout });
+  it.each([1, 7])('can be raced by the full field with nobody stuck (hazard seed %i)', (seed) => {
+    const world = new RaceWorld(track, { autopilot: { pace: 0.9, steerGain: 2.4 }, layout: def.layout, seed });
     let respawns = 0;
     const reset = world.resetCar.bind(world);
     world.resetCar = (i: number) => {
