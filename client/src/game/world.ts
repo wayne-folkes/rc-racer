@@ -193,7 +193,7 @@ export class RaceWorld {
       for (let j = i + 1; j < cars.length; j++) collideCars(cars[i], cars[j]);
     }
 
-    this.projs = cars.map((car) => collideWithWalls(car, track).proj);
+    this.projs = cars.map((car) => collideWithWalls(car, track, dt).proj);
     this.playerProj = this.projs[0];
     cars.forEach((car, i) => {
       const jump = updateHeight(car, this.projs[i], this.ramps, track.length, dt);
