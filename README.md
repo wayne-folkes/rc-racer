@@ -18,11 +18,13 @@ npm run dev
 ```
 
 The game opens on a title screen with Continue, New season, Records, Settings (sound, volume, reset
-progress) and How to play. New season asks you to pick a Buggy or a Monster Truck, and everyone on
-the track drives the same one. The buggy is quicker and sharper; the truck is a few percent slower
+progress) and How to play. New season asks you to pick a circuit, then a Buggy or a Monster Truck, and
+everyone on the track drives the same one. Both circuits are open from the start and run four rounds:
+the Classic Cup (meadow, desert, lakeside, snow) and the Space Cup, which races over the Moon (Tranquility
+Run), Mars (Olympus Rally), Io (Pele Loop) and Europa (Conamara Run), each with its own scenery and weather. The buggy is quicker and sharper; the truck is a few percent slower
 and softer to steer, but its big tires shrug off oil and puddles. Easy mode, a switch on the same
-screen, starts you 2nd (instead of 4th) and makes the opponents a little slower. Reverse, another
-switch, drives every track the other way round; each direction has its own records.
+screen, starts you 2nd (instead of 4th) and makes the opponents a little slower. Reverse, a switch on the
+circuit screen, drives every track the other way round. Every circuit, vehicle and direction has its own records.
 
 `npm test` runs the unit tests (handling, track maths, collisions, race rules, AI, items, season
 rules, and full four-car races on every track). `npm run build` type-checks and builds to `client/dist`.
@@ -86,8 +88,9 @@ which builds `client/` as a static site (`vercel.json`). Pull requests get previ
 - `client/src/game/items.ts`: pickups, missiles, bombs, boost pads, oil and puddles, and the demo layout.
 - `client/src/game/jumps.ts`: ramps, car height and jumping. Airborne cars can't steer and pass over
   pickups, hazards, bombs and other cars.
-- `client/src/game/tracks.ts`: the season's four tracks, each with its layout and theme. `tracks.test.ts`
-  checks every track (corner radii, spacing, hazard placement, a full AI race).
+- `client/src/game/tracks.ts`, `spaceTracks.ts`: the circuits and their tracks, each with its layout and
+  theme, and the reversed copy of each. `tracks.test.ts` checks every track both ways round (corner radii,
+  spacing, hazard placement, a full AI race).
 - `client/src/game/season.ts`, `seasonStorage.ts`: season rules (prize money, upgrades, difficulty per
   round, top three or game over) and saving progress in the browser.
 - `client/src/game/vehicles.ts`: the buggy and the monster truck: names, blurbs and handling. The truck is the

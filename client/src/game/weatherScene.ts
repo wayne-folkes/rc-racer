@@ -15,7 +15,8 @@ import {
 import { seededRandom } from './items';
 import type { Weather } from './tracks';
 
-// Ambient weather drawn over the track: snow falling around the car, or tumbleweeds rolling across it.
+// Ambient weather drawn over the track: snow, dust, embers or ice glitter drifting around the car, or
+// tumbleweeds rolling across it.
 // Purely visual. Nothing here reads or changes the cars or the simulation.
 
 interface Vec2 {
@@ -23,19 +24,49 @@ interface Vec2 {
   z: number;
 }
 
-const SNOW_COUNT = 2600;
-/** The snow box is this wide and deep, centred on the car, and rolls along with it. */
-const SNOW_BOX = 90;
-const SNOW_HEIGHT = 30;
-const SNOW_FALL_MIN = 2.5;
-const SNOW_FALL_MAX = 5;
-/** Light wind drift the snow is carried along by (m/s). */
-const SNOW_DRIFT = 0.6;
-/** Peak sideways sway of a flake (m/s), and how fast each flake cycles through it (rad/s). */
-const SNOW_SWAY = 0.6;
-const SNOW_SWAY_RATE = 1.2;
-/** Flake size in CSS pixels. The renderer scales it by the device pixel ratio. */
-const SNOW_SIZE = 7;
+/** The flurry box is this wide and deep, centred on the car, and rolls along with it. */
+const FLURRY_BOX = 90;
+const FLURRY_HEIGHT = 30;
+
+/** How one kind of drifting-particle weather looks and moves. A negative fall speed means rising. */
+interface Flurry {
+  count: number;
+  fallMin: number;
+  fallMax: number;
+  /** Wind drift the particles are carried along by (m/s). */
+  drift: number;
+  /** Peak sideways sway of a particle (m/s), and how fast each cycles through it (rad/s). */
+  sway: number;
+  swayRate: number;
+  /** Particle size in CSS pixels. The renderer scales it by the device pixel ratio. */
+  size: number;
+  opacity: number;
+  /** The sprite's bright core and its fading rim, as "r, g, b". */
+  core: string;
+  rim: string;
+}
+
+const FLURRIES: Record<Exclude<Weather, 'tumbleweeds'>, Flurry> = {
+  snow: {
+    count: 2600,
+    fallMin: 2.5,
+    fallMax: 5,
+    drift: 0.6,
+    sway: 0.6,
+    swayRate: 1.2,
+    size: 7,
+    opacity: 1,
+    // A faint cool-grey rim, so flakes still show against snowy ground.
+    core: '255, 255, 255',
+    rim: '150, 168, 196',
+  },
+  // Fine dust blowing sideways across Mars.
+  dust: { count: 1500, fallMin: 0.1, fallMax: 0.5, drift: 5, sway: 1.5, swayRate: 0.8, size: 5, opacity: 0.6, core: '242, 205, 160', rim: '200, 140, 90' },
+  // Sparks lifting off Io's lava.
+  embers: { count: 700, fallMin: -4, fallMax: -1.5, drift: 0.4, sway: 0.8, swayRate: 1.5, size: 5, opacity: 1, core: '255, 225, 130', rim: '255, 90, 20' },
+  // Ice crystals catching the light over Europa.
+  glitter: { count: 900, fallMin: 0.4, fallMax: 1.2, drift: 0.3, sway: 0.3, swayRate: 2.5, size: 4, opacity: 1, core: '255, 255, 255', rim: '120, 200, 255' },
+};
 
 const TUMBLE_MIN = 2;
 const TUMBLE_MAX = 4;
@@ -64,7 +95,7 @@ export interface WeatherScene {
   root: Object3D;
   /** Moves the weather one frame. The focus is the point the camera follows, the player's car. */
   update(dt: number, focusX: number, focusZ: number): void;
-  /** Frees what disposeScene can't reach: the snow's buffers and sprite. */
+  /** Frees what disposeScene can't reach: the particles' buffers and sprite. */
   dispose(): void;
 }
 
@@ -84,9 +115,9 @@ interface Tumbleweed {
 
 /** Builds the weather for a track theme, or returns null when the theme has none. The seed sets its pattern. */
 export function createWeather(kind: Weather | undefined, seed: number): WeatherScene | null {
-  if (kind === 'snow') return createSnow(seed);
+  if (kind === undefined) return null;
   if (kind === 'tumbleweeds') return createTumbleweeds(seed);
-  return null;
+  return createFlurry(seed, FLURRIES[kind]);
 }
 
 /** A random horizontal wind direction, as a unit vector. */
@@ -100,62 +131,63 @@ function acrossWind(wind: Vec2): Vec2 {
   return { x: -wind.z, z: wind.x };
 }
 
-/** Keeps a coordinate inside the snow box centred on the focus, wrapping it to the far side. */
+/** Keeps a coordinate inside the flurry box centred on the focus, wrapping it to the far side. */
 function wrapToBox(value: number, focus: number): number {
   const offset = value - focus;
-  return focus + ((((offset + SNOW_BOX / 2) % SNOW_BOX) + SNOW_BOX) % SNOW_BOX) - SNOW_BOX / 2;
+  return focus + ((((offset + FLURRY_BOX / 2) % FLURRY_BOX) + FLURRY_BOX) % FLURRY_BOX) - FLURRY_BOX / 2;
 }
 
-/** A small round white sprite that fades to transparent at the edge. */
-function flakeTexture(): CanvasTexture {
+/** A small round sprite with a bright core that fades to transparent at the edge. */
+function flakeTexture({ core, rim }: Flurry): CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 32;
   canvas.height = 32;
   const ctx = canvas.getContext('2d')!;
   const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-  // A white core with a faint cool-grey rim, so flakes still show against snowy ground.
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  gradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.95)');
-  gradient.addColorStop(0.62, 'rgba(150, 168, 196, 0.55)');
-  gradient.addColorStop(1, 'rgba(150, 168, 196, 0)');
+  gradient.addColorStop(0, `rgba(${core}, 1)`);
+  gradient.addColorStop(0.4, `rgba(${core}, 0.95)`);
+  gradient.addColorStop(0.62, `rgba(${rim}, 0.55)`);
+  gradient.addColorStop(1, `rgba(${rim}, 0)`);
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 32, 32);
   return new CanvasTexture(canvas);
 }
 
-/** Flakes in one Points object, falling through a box that moves with the car. */
-function createSnow(seed: number): WeatherScene {
+/** Particles in one Points object, drifting through a box that moves with the car: snow, dust, embers or glitter. */
+function createFlurry(seed: number, flurry: Flurry): WeatherScene {
+  const { count, fallMin, fallMax, drift, sway: swayAmount, swayRate } = flurry;
   const rand = seededRandom(seed);
   const wind = randomWind(rand);
   const across = acrossWind(wind);
 
   // Positions are kept as world coordinates; the y column is height above the ground.
-  const positions = new Float32Array(SNOW_COUNT * 3);
-  const fallSpeed = new Float32Array(SNOW_COUNT);
-  const phase = new Float32Array(SNOW_COUNT);
-  for (let i = 0; i < SNOW_COUNT; i++) {
-    positions[i * 3] = (rand() - 0.5) * SNOW_BOX;
-    positions[i * 3 + 1] = rand() * SNOW_HEIGHT;
-    positions[i * 3 + 2] = (rand() - 0.5) * SNOW_BOX;
-    fallSpeed[i] = SNOW_FALL_MIN + rand() * (SNOW_FALL_MAX - SNOW_FALL_MIN);
+  const positions = new Float32Array(count * 3);
+  const fallSpeed = new Float32Array(count);
+  const phase = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = (rand() - 0.5) * FLURRY_BOX;
+    positions[i * 3 + 1] = rand() * FLURRY_HEIGHT;
+    positions[i * 3 + 2] = (rand() - 0.5) * FLURRY_BOX;
+    fallSpeed[i] = fallMin + rand() * (fallMax - fallMin);
     phase[i] = rand() * Math.PI * 2;
   }
 
   const attribute = new BufferAttribute(positions, 3).setUsage(DynamicDrawUsage);
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', attribute);
-  const texture = flakeTexture();
+  const texture = flakeTexture(flurry);
   const material = new PointsMaterial({
     map: texture,
     color: '#ffffff',
-    size: SNOW_SIZE,
-    // Flakes are a fixed size on screen, which suits the orthographic camera.
+    size: flurry.size,
+    // Particles are a fixed size on screen, which suits the orthographic camera.
     sizeAttenuation: false,
     transparent: true,
+    opacity: flurry.opacity,
     depthWrite: false,
   });
   const points = new Points(geometry, material);
-  // The flakes move with the car, so the bounding sphere made at creation goes stale. Don't cull them.
+  // The particles move with the car, so the bounding sphere made at creation goes stale. Don't cull them.
   points.frustumCulled = false;
 
   let time = 0;
@@ -163,15 +195,16 @@ function createSnow(seed: number): WeatherScene {
     root: points,
     update(dt, focusX, focusZ) {
       time += dt;
-      for (let i = 0; i < SNOW_COUNT; i++) {
+      for (let i = 0; i < count; i++) {
         const k = i * 3;
-        // Each flake sways side to side across the wind, at its own phase.
-        const sway = SNOW_SWAY * Math.cos(time * SNOW_SWAY_RATE + phase[i]);
-        positions[k] = wrapToBox(positions[k] + (wind.x * SNOW_DRIFT + across.x * sway) * dt, focusX);
-        positions[k + 2] = wrapToBox(positions[k + 2] + (wind.z * SNOW_DRIFT + across.z * sway) * dt, focusZ);
+        // Each particle sways side to side across the wind, at its own phase.
+        const sway = swayAmount * Math.cos(time * swayRate + phase[i]);
+        positions[k] = wrapToBox(positions[k] + (wind.x * drift + across.x * sway) * dt, focusX);
+        positions[k + 2] = wrapToBox(positions[k + 2] + (wind.z * drift + across.z * sway) * dt, focusZ);
         positions[k + 1] -= fallSpeed[i] * dt;
-        // Back to the top once it reaches the ground.
-        if (positions[k + 1] < 0) positions[k + 1] += SNOW_HEIGHT;
+        // Round to the other end once it reaches the ground, or the top if it's rising.
+        if (positions[k + 1] < 0) positions[k + 1] += FLURRY_HEIGHT;
+        else if (positions[k + 1] > FLURRY_HEIGHT) positions[k + 1] -= FLURRY_HEIGHT;
       }
       attribute.needsUpdate = true;
     },

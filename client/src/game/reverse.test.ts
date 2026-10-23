@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildRamps } from './jumps';
 import { Season } from './season';
 import { loadSeason, saveSeason } from './seasonStorage';
-import { ALL_TRACKS, REVERSED_TRACKS, reverseTrack, TRACKS, type TrackDef } from './tracks';
+import { ALL_TRACKS, CIRCUIT_IDS, circuitTracks, reverseTrack, TRACKS, type TrackDef } from './tracks';
 import { TrackPath } from './trackPath';
 
 const pathOf = (def: TrackDef) => new TrackPath(def.controlPoints, def.halfWidth);
@@ -16,7 +16,10 @@ function worldSpot(def: TrackDef, at: number, lateral: number) {
 
 const distance = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
 
-describe.each(TRACKS.map((forward, i) => ({ name: forward.name, forward, reversed: REVERSED_TRACKS[i] })))('$name, reversed', ({ forward, reversed }) => {
+const FORWARD_TRACKS = CIRCUIT_IDS.flatMap((id) => circuitTracks(id, false));
+const REVERSED_TRACKS = CIRCUIT_IDS.flatMap((id) => circuitTracks(id, true));
+
+describe.each(FORWARD_TRACKS.map((forward, i) => ({ name: forward.name, forward, reversed: REVERSED_TRACKS[i] })))('$name, reversed', ({ forward, reversed }) => {
   it('is named and identified as a separate track', () => {
     expect(reversed.reversed).toBe(true);
     expect(forward.reversed).toBeUndefined();
@@ -71,7 +74,7 @@ describe('all tracks', () => {
   it('have their own ids, so each has its own records', () => {
     const ids = ALL_TRACKS.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ALL_TRACKS.length).toBe(TRACKS.length * 2);
+    expect(ALL_TRACKS.length).toBe(FORWARD_TRACKS.length * 2);
   });
 
   it('reversing leaves the original alone', () => {

@@ -25,7 +25,7 @@ import { buildRamps } from './game/rampScene';
 import { updateRecords } from './game/records';
 import { QUALIFYING_POSITION, Season, type SeasonStatus } from './game/season';
 import { loadSeason, saveSeason } from './game/seasonStorage';
-import { TRACKS, type TrackDef } from './game/tracks';
+import { CIRCUIT_IDS, circuitTracks, type CircuitId, type TrackDef } from './game/tracks';
 import { TrackPath, type Projection } from './game/trackPath';
 import { buildTrackScene, disposeScene } from './game/trackScene';
 import { buildGridLabel } from './game/gridLabel';
@@ -34,11 +34,12 @@ import type { VehicleId } from './game/vehicles';
 import { createWeather, type WeatherScene } from './game/weatherScene';
 import { NO_INPUT, RaceWorld, type Racer } from './game/world';
 import { BackCard, type MenuCard } from './ui/card';
+import { CircuitCard } from './ui/circuit';
 import { Garage } from './ui/garage';
 import { PauseCard } from './ui/pause';
 import { SettingsCard } from './ui/settings';
 import { RecordsCard, TitleCard, type TitleInfo } from './ui/title';
-import { VehicleCard, type SeasonModes } from './ui/vehicle';
+import { VehicleCard } from './ui/vehicle';
 
 const STEP = 1 / 120;
 const MAX_FRAME = 0.25;
@@ -115,7 +116,7 @@ Object.assign(sun.shadow.camera, {
 sun.shadow.bias = -0.0005;
 scene.add(sun, sun.target);
 
-const season = new Season(TRACKS, loadSeason() ?? undefined);
+const season = new Season(loadSeason() ?? undefined);
 
 function persist(): void {
   saveSeason(season.state);
@@ -240,8 +241,9 @@ const pauseCard = new PauseCard(canRestart, {
   settings: () => openSettings(false),
   quit: quitToTitle,
 });
-const vehicleCard = new VehicleCard({ choose: startSeason, back: backFromVehicle }, () => season.state);
-const allCards: MenuCard[] = [titleCard, recordsCard, howtoCard, settingsCard, pauseCard, vehicleCard];
+const circuitCard = new CircuitCard({ choose: pickCircuit, back: backFromNewSeason }, () => season.state.reverse);
+const vehicleCard = new VehicleCard({ choose: startSeason, back: popCard }, () => season.state.easy);
+const allCards: MenuCard[] = [titleCard, recordsCard, howtoCard, settingsCard, pauseCard, circuitCard, vehicleCard];
 
 /** Takes the current race's scene, cars and item effects out of the scene and frees them. */
 function clearRace(): void {
@@ -345,20 +347,28 @@ function retryRace(): void {
   startRace();
 }
 
-/** Asks which vehicle to start a season in. The current season isn't touched until one is picked, so backing out keeps it. */
+/** The circuit and direction picked on the first card, held while the vehicle card is up. */
+let pendingCircuit: { circuit: CircuitId; reverse: boolean } = { circuit: 'classic', reverse: false };
+
+/** Asks which circuit, then which vehicle, to start a season in. The current season isn't touched until a vehicle is picked, so backing out keeps it. */
 function newSeason(): void {
   results.root.hidden = true;
+  pushCard(circuitCard);
+}
+
+function pickCircuit(circuit: CircuitId, reverse: boolean): void {
+  pendingCircuit = { circuit, reverse };
   pushCard(vehicleCard);
 }
 
-function startSeason(vehicle: VehicleId, { easy, reverse }: SeasonModes): void {
-  season.restart(vehicle, easy, reverse);
+function startSeason(vehicle: VehicleId, easy: boolean): void {
+  season.restart(vehicle, easy, pendingCircuit.reverse, pendingCircuit.circuit);
   persist();
   startRace();
 }
 
-/** Backs out of the vehicle card: to the title it came from, or to the results card if it came from there. */
-function backFromVehicle(): void {
+/** Backs out of the circuit card: to the title it came from, or to the results card if it came from there. */
+function backFromNewSeason(): void {
   popCard();
   if (cardStack.length === 0) results.root.hidden = false;
 }
@@ -398,22 +408,27 @@ function titleInfo(): TitleInfo {
   return { continueLabel: `Continue · Round ${index + 1} · ${season.tracks[index].name}`, inProgress };
 }
 
+/** The tracks the title's demo cycles through: every circuit in turn, driven the way the saved season goes. */
+function demoTracks(): TrackDef[] {
+  return CIRCUIT_IDS.flatMap((id) => circuitTracks(id, season.state.reverse));
+}
+
 /** Starts the title's attract demo on the track at this index. No season, records or banners are involved. */
 function startDemo(index: number): void {
   demoIndex = index;
-  buildRace(season.tracks[index], 'demo');
+  buildRace(demoTracks()[index], 'demo');
 }
 
 /** Moves the demo on to the next track in the list, so the title cycles through them all. */
 function nextDemo(): void {
-  startDemo((demoIndex + 1) % season.tracks.length);
+  startDemo((demoIndex + 1) % demoTracks().length);
 }
 
 /** Shows the title screen over an attract demo. Nothing here changes the season or the records. */
 function showTitle(): void {
   clearCards();
   results.root.hidden = true;
-  startDemo(savedSeasonInProgress() ? upcomingRound() : 0);
+  startDemo(savedSeasonInProgress() ? Math.max(0, demoTracks().indexOf(season.tracks[upcomingRound()])) : 0);
   pushCard(titleCard);
 }
 

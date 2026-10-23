@@ -1,22 +1,24 @@
 import { DEMO_LAYOUT, pickupRow, type TrackLayout, type TrackSpot } from './items';
 import { RAMP_LENGTH } from './jumps';
+import { SPACE_TRACKS } from './spaceTracks';
 import { DEMO_TRACK, TrackPath, type Point } from './trackPath';
 
 // The season's tracks, in race order. Each must pass tracks.test.ts: no corner tighter than the
 // road is wide, hazards only where the racing line is steady enough to steer round them, and a
 // full AI race with nobody getting stuck.
 
-export type Scenery = 'trees' | 'cacti' | 'pines';
+export type Scenery = 'trees' | 'cacti' | 'pines' | 'craters' | 'mesas' | 'volcanoes' | 'ice';
 /** Ambient effects drawn over the track. Purely visual: they don't touch the cars. */
-export type Weather = 'snow' | 'tumbleweeds';
+export type Weather = 'snow' | 'tumbleweeds' | 'dust' | 'embers' | 'glitter';
+export type PondStyle = 'water' | 'lava';
 
 export interface TrackTheme {
   sky: string;
   ground: string;
   road: string;
   scenery: Scenery;
-  /** Small ponds dotted around the infield and outside the track. */
-  ponds?: boolean;
+  /** Small pools dotted around the infield and outside the track. */
+  ponds?: PondStyle;
   weather?: Weather;
 }
 
@@ -94,7 +96,7 @@ export const TRACKS: TrackDef[] = [
       ],
       ramps: [{ at: 0.1 }, { at: 0.72 }],
     },
-    theme: { sky: '#9fd4ef', ground: '#7cc36b', road: '#4a4f5a', scenery: 'trees', ponds: true },
+    theme: { sky: '#9fd4ef', ground: '#7cc36b', road: '#4a4f5a', scenery: 'trees', ponds: 'water' },
   },
   {
     id: 'snow',
@@ -155,8 +157,35 @@ export function reverseTrack(def: TrackDef): TrackDef {
   };
 }
 
-/** Every track driven the other way, in the same order. */
-export const REVERSED_TRACKS: TrackDef[] = TRACKS.map(reverseTrack);
+export type CircuitId = 'classic' | 'space';
+export const CIRCUIT_IDS: CircuitId[] = ['classic', 'space'];
+export const DEFAULT_CIRCUIT: CircuitId = 'classic';
+
+export interface Circuit {
+  name: string;
+  blurb: string;
+  /** Four rounds, in race order. */
+  tracks: TrackDef[];
+}
+
+export const CIRCUITS: Record<CircuitId, Circuit> = {
+  classic: { name: 'Classic Cup', blurb: 'Meadow, desert, lakeside and snow.', tracks: TRACKS },
+  space: { name: 'Space Cup', blurb: 'The Moon, Mars, Io and Europa.', tracks: SPACE_TRACKS },
+};
+
+export function isCircuitId(value: unknown): value is CircuitId {
+  return typeof value === 'string' && (CIRCUIT_IDS as string[]).includes(value);
+}
+
+const reversedCircuits = new Map<CircuitId, TrackDef[]>();
+
+/** A circuit's tracks in race order, driven forwards or all of them the other way round. */
+export function circuitTracks(id: CircuitId, reverse: boolean): TrackDef[] {
+  if (!reverse) return CIRCUITS[id].tracks;
+  let reversed = reversedCircuits.get(id);
+  if (!reversed) reversedCircuits.set(id, (reversed = CIRCUITS[id].tracks.map(reverseTrack)));
+  return reversed;
+}
 
 /** Every track there is, either way round: what the guard tests run over and what a records reset clears. */
-export const ALL_TRACKS: TrackDef[] = [...TRACKS, ...REVERSED_TRACKS];
+export const ALL_TRACKS: TrackDef[] = CIRCUIT_IDS.flatMap((id) => [...circuitTracks(id, false), ...circuitTracks(id, true)]);

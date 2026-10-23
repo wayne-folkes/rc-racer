@@ -1,50 +1,25 @@
 import { VEHICLE_IDS, VEHICLES, type VehicleId } from '../game/vehicles';
-import { byId, type MenuCard } from './card';
+import { byId, Toggle, type MenuCard } from './card';
 
-// The pick screen shown when a season starts: one row per vehicle, and switches for easy mode and
-// reverse tracks. The card's markup lives in index.html; the rows are built once here, in the
-// garage's style.
-
-export interface SeasonModes {
-  easy: boolean;
-  reverse: boolean;
-}
+// The second pick screen when a season starts, after the circuit: one row per vehicle, and a switch for
+// easy mode. The card's markup lives in index.html; the rows are built once here, in the garage's style.
 
 export interface VehicleActions {
-  /** Starts a season in this vehicle, with these modes. */
-  choose(id: VehicleId, modes: SeasonModes): void;
+  /** Starts a season in this vehicle, in easy mode or not. */
+  choose(id: VehicleId, easy: boolean): void;
   /** Backs out to wherever the card was opened from, without touching the current season. */
   back(): void;
-}
-
-/** A button that flips between "Label: Off" and "Label: On". */
-class Toggle {
-  on = false;
-
-  constructor(
-    private readonly button: HTMLButtonElement,
-    private readonly label: string,
-  ) {
-    button.addEventListener('click', () => this.set(!this.on));
-  }
-
-  set(on: boolean): void {
-    this.on = on;
-    this.button.textContent = `${this.label}: ${on ? 'On' : 'Off'}`;
-    this.button.setAttribute('aria-pressed', String(on));
-  }
 }
 
 export class VehicleCard implements MenuCard {
   readonly root = byId('vehicle');
   private readonly buttons: HTMLButtonElement[] = [];
   private readonly easy = new Toggle(byId<HTMLButtonElement>('vehicle-easy'), 'Easy mode');
-  private readonly reverse = new Toggle(byId<HTMLButtonElement>('vehicle-reverse'), 'Reverse');
 
   constructor(
     private readonly actions: VehicleActions,
-    /** The modes the current season is in, which the switches start on. */
-    private readonly currentModes: () => SeasonModes,
+    /** Whether the current season is in easy mode, which the switch starts on. */
+    private readonly currentEasy: () => boolean,
   ) {
     const list = byId('vehicle-options');
     for (const id of VEHICLE_IDS) {
@@ -67,7 +42,7 @@ export class VehicleCard implements MenuCard {
       button.type = 'button';
       button.className = 'upgrade-buy';
       button.textContent = `Drive the ${name}`;
-      button.addEventListener('click', () => actions.choose(id, { easy: this.easy.on, reverse: this.reverse.on }));
+      button.addEventListener('click', () => actions.choose(id, this.easy.on));
 
       item.append(head, text, button);
       list.append(item);
@@ -77,9 +52,7 @@ export class VehicleCard implements MenuCard {
   }
 
   refresh(): void {
-    const { easy, reverse } = this.currentModes();
-    this.easy.set(easy);
-    this.reverse.set(reverse);
+    this.easy.set(this.currentEasy());
   }
 
   /** Enter and the gamepad's A press the first vehicle, the buggy, when nothing has focus. */

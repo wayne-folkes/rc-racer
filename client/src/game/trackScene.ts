@@ -1,6 +1,7 @@
 import {
   BufferGeometry,
   CanvasTexture,
+  CircleGeometry,
   ConeGeometry,
   CylinderGeometry,
   DodecahedronGeometry,
@@ -14,6 +15,7 @@ import {
   Object3D,
   PlaneGeometry,
   RepeatWrapping,
+  RingGeometry,
   Shape,
   ShapeGeometry,
   Sprite,
@@ -22,7 +24,7 @@ import {
 import { seededRandom } from './items';
 import { gridPosition, OPPONENTS, PLAYER, SLOT_LENGTH, SLOT_WIDTH, START_LINE_DEPTH } from './racers';
 import type { Point, TrackPath } from './trackPath';
-import type { TrackTheme } from './tracks';
+import type { PondStyle, TrackTheme } from './tracks';
 
 const WALL_HEIGHT = 0.7;
 const WALL_THICKNESS = 0.6;
@@ -244,9 +246,9 @@ function gridSlots(track: TrackPath): Group {
 function scenery(track: TrackPath, theme: TrackTheme): Group {
   const group = new Group();
   const rand = seededRandom(SCENERY_SEED);
-  const make = { trees, cacti, pines }[theme.scenery];
+  const make = { trees, cacti, pines, craters, mesas, volcanoes, ice }[theme.scenery];
   group.add(make(track, rand));
-  if (theme.ponds) group.add(ponds(track, rand));
+  if (theme.ponds) group.add(ponds(track, rand, theme.ponds));
   return group;
 }
 
@@ -274,14 +276,17 @@ function sceneryBox(track: TrackPath): Box {
   };
 }
 
-/** Scatters up to `count` objects in the scenery box, skipping spots on or near the road. */
-function scatter(track: TrackPath, rand: () => number, count: number, make: () => Object3D): Group {
+/**
+ * Scatters up to `count` objects in the scenery box, skipping spots on or near the road. Wide objects
+ * pass how far they reach from their centre, so their edges keep clear of the road too.
+ */
+function scatter(track: TrackPath, rand: () => number, count: number, make: () => Object3D, reach = 0): Group {
   const group = new Group();
   const box = sceneryBox(track);
   for (let attempt = 0; attempt < 2000 && group.children.length < count; attempt++) {
     const x = box.minX + rand() * (box.maxX - box.minX);
     const z = box.minZ + rand() * (box.maxZ - box.minZ);
-    if (Math.abs(track.project(x, z).lateral) < track.halfWidth + SCENERY_CLEARANCE) continue;
+    if (Math.abs(track.project(x, z).lateral) < track.halfWidth + SCENERY_CLEARANCE + reach) continue;
 
     const object = make();
     object.position.set(x, 0, z);
@@ -389,6 +394,197 @@ function pines(track: TrackPath, rand: () => number): Group {
   });
 }
 
+/** Moon: shallow craters with a pale rim, grey boulders, and the odd flag. */
+function craters(track: TrackPath, rand: () => number): Group {
+  const floorGeom = new CircleGeometry(1, 16);
+  floorGeom.rotateX(-Math.PI / 2);
+  const rimGeom = new RingGeometry(1, 1.25, 16);
+  rimGeom.rotateX(-Math.PI / 2);
+  const floorMat = new MeshStandardMaterial({ color: '#5d5d64', roughness: 1 });
+  const rimMat = new MeshStandardMaterial({ color: '#b6b6bc', roughness: 1 });
+  const boulderGeom = new DodecahedronGeometry(0.6, 0);
+  const boulderMat = new MeshStandardMaterial({ color: '#9b9ba1', flatShading: true, roughness: 0.95 });
+  const poleGeom = new CylinderGeometry(0.04, 0.04, 2.2, 5);
+  const poleMat = new MeshStandardMaterial({ color: '#d8d8d8', roughness: 0.6 });
+  const clothGeom = new PlaneGeometry(0.9, 0.6);
+  const clothMat = new MeshStandardMaterial({ color: '#e0e0e8', side: DoubleSide, roughness: 0.9 });
+
+  const crater = () => {
+    const group = new Group();
+    const floor = new Mesh(floorGeom, floorMat);
+    const rim = new Mesh(rimGeom, rimMat);
+    floor.position.y = rim.position.y = POND_Y;
+    floor.receiveShadow = rim.receiveShadow = true;
+    group.add(floor, rim);
+    const r = 1.4 + rand() * 2.2;
+    group.scale.set(r, 1, r);
+    return group;
+  };
+  const boulder = () => {
+    const mesh = new Mesh(boulderGeom, boulderMat);
+    const s = 0.5 + rand() * 1.1;
+    mesh.scale.set(s, s * 0.7, s * 0.85);
+    mesh.position.y = 0.25 * s;
+    mesh.castShadow = true;
+    return mesh;
+  };
+  const flag = () => {
+    const group = new Group();
+    const pole = new Mesh(poleGeom, poleMat);
+    pole.position.y = 1.1;
+    const cloth = new Mesh(clothGeom, clothMat);
+    cloth.position.set(0.47, 1.85, 0);
+    pole.castShadow = true;
+    group.add(pole, cloth);
+    return group;
+  };
+
+  const group = new Group();
+  group.add(scatter(track, rand, 80, crater, 4.5));
+  group.add(scatter(track, rand, 90, () => (rand() < 0.04 ? flag() : boulder())));
+  return group;
+}
+
+/** Mars: rust-red boulders and flat-topped mesas. */
+function mesas(track: TrackPath, rand: () => number): Group {
+  const boulderGeom = new DodecahedronGeometry(0.6, 0);
+  const boulderMat = new MeshStandardMaterial({ color: '#8f3f22', flatShading: true, roughness: 0.95 });
+  const bodyGeom = new CylinderGeometry(0.8, 1, 1, 8);
+  const bodyMat = new MeshStandardMaterial({ color: '#a64a28', flatShading: true, roughness: 0.95 });
+  const topGeom = new CylinderGeometry(0.62, 0.7, 0.4, 8);
+  const topMat = new MeshStandardMaterial({ color: '#c26a3e', flatShading: true, roughness: 0.95 });
+
+  const boulder = () => {
+    const mesh = new Mesh(boulderGeom, boulderMat);
+    const s = 0.5 + rand() * 1.2;
+    mesh.scale.set(s, s * 0.7, s * 0.9);
+    mesh.position.y = 0.25 * s;
+    mesh.castShadow = true;
+    return mesh;
+  };
+  // A broad base with a narrower, paler step on top.
+  const mesa = () => {
+    const group = new Group();
+    const height = 1.2 + rand() * 1.8;
+    const body = new Mesh(bodyGeom, bodyMat);
+    body.scale.set(1, height, 1);
+    body.position.y = height / 2;
+    const top = new Mesh(topGeom, topMat);
+    top.position.y = height + 0.2;
+    body.castShadow = top.castShadow = true;
+    group.add(body, top);
+    group.scale.set(2.2 + rand() * 1.6, 1, 2.2 + rand() * 1.6);
+    return group;
+  };
+
+  const group = new Group();
+  group.add(scatter(track, rand, 26, mesa, 4.5));
+  group.add(scatter(track, rand, 100, boulder));
+  return group;
+}
+
+/** Io: squat volcano cones with a glowing vent, and clusters of pale sulphur spikes. */
+function volcanoes(track: TrackPath, rand: () => number): Group {
+  const coneGeom = new CylinderGeometry(0.9, 5, 3.6, 9);
+  const coneMat = new MeshStandardMaterial({ color: '#7a5a22', flatShading: true, roughness: 0.95 });
+  const ventGeom = new CircleGeometry(1, 9);
+  ventGeom.rotateX(-Math.PI / 2);
+  const ventMat = new MeshStandardMaterial({ color: '#ff7a1c', emissive: '#ff4a00', emissiveIntensity: 1 });
+  const spikeGeom = new ConeGeometry(0.3, 1.6, 5);
+  const spikeMat = new MeshStandardMaterial({ color: '#f4e662', flatShading: true, roughness: 0.7 });
+
+  const volcano = () => {
+    const group = new Group();
+    const cone = new Mesh(coneGeom, coneMat);
+    cone.position.y = 1.8;
+    cone.castShadow = true;
+    const vent = new Mesh(ventGeom, ventMat);
+    vent.position.y = 3.62;
+    group.add(cone, vent);
+    group.scale.setScalar(0.8 + rand() * 0.6);
+    return group;
+  };
+  const spikes = () => {
+    const group = new Group();
+    const n = 2 + Math.floor(rand() * 3);
+    for (let i = 0; i < n; i++) {
+      const spike = new Mesh(spikeGeom, spikeMat);
+      const s = 0.6 + rand() * 1.1;
+      spike.scale.set(s, s, s);
+      spike.position.set((rand() - 0.5) * 1.2, 0.8 * s, (rand() - 0.5) * 1.2);
+      spike.rotation.z = (rand() - 0.5) * 0.3;
+      spike.castShadow = true;
+      group.add(spike);
+    }
+    return group;
+  };
+
+  const group = new Group();
+  group.add(scatter(track, rand, 20, volcano, 6));
+  group.add(scatter(track, rand, 70, spikes, 1));
+  return group;
+}
+
+/** Europa: tilted ice spires, and the long reddish cracks that run across its surface. */
+function ice(track: TrackPath, rand: () => number): Group {
+  const spireGeom = new ConeGeometry(0.6, 1, 5);
+  const spireMat = new MeshStandardMaterial({ color: '#c4e5f7', flatShading: true, roughness: 0.2, metalness: 0.1 });
+
+  const spires = () => {
+    const group = new Group();
+    const n = 1 + Math.floor(rand() * 3);
+    for (let i = 0; i < n; i++) {
+      const height = 2 + rand() * 3.2;
+      const spire = new Mesh(spireGeom, spireMat);
+      spire.scale.set(1, height, 1);
+      spire.position.set((rand() - 0.5) * 1.6, height / 2, (rand() - 0.5) * 1.6);
+      spire.rotation.set((rand() - 0.5) * 0.3, 0, (rand() - 0.5) * 0.3);
+      spire.castShadow = true;
+      group.add(spire);
+    }
+    return group;
+  };
+
+  const group = new Group();
+  group.add(scatter(track, rand, 60, spires, 1));
+  group.add(cracks(track, rand));
+  return group;
+}
+
+/** Thin dark-red lines lying on the ground, each a few bent segments long. A crack stops short of the road. */
+function cracks(track: TrackPath, rand: () => number): Group {
+  const group = new Group();
+  const mat = new MeshStandardMaterial({ color: '#8a4a3c', roughness: 1 });
+  const box = sceneryBox(track);
+  const keepClear = track.halfWidth + CURB_WIDTH + 1.5;
+  const clear = (x: number, z: number) => Math.abs(track.project(x, z).lateral) > keepClear;
+
+  for (let made = 0, attempt = 0; made < 22 && attempt < 400; attempt++) {
+    let x = box.minX + rand() * (box.maxX - box.minX);
+    let z = box.minZ + rand() * (box.maxZ - box.minZ);
+    if (!clear(x, z)) continue;
+    let heading = rand() * Math.PI * 2;
+    for (let k = 0; k < 4; k++) {
+      const length = 6 + rand() * 4;
+      heading += (rand() - 0.5) * 1;
+      const nx = x + Math.cos(heading) * length;
+      const nz = z + Math.sin(heading) * length;
+      if (!clear(nx, nz) || !clear((x + nx) / 2, (z + nz) / 2)) break;
+      const geom = new PlaneGeometry(length, 0.35);
+      geom.rotateX(-Math.PI / 2);
+      const segment = new Mesh(geom, mat);
+      segment.position.set((x + nx) / 2, POND_Y, (z + nz) / 2);
+      segment.rotation.y = -heading;
+      segment.receiveShadow = true;
+      group.add(segment);
+      x = nx;
+      z = nz;
+    }
+    made++;
+  }
+  return group;
+}
+
 /** Whether a point lies inside the closed loop of track points (even-odd ray cast). */
 function insideLoop(points: Point[], x: number, z: number): boolean {
   let inside = false;
@@ -400,10 +596,15 @@ function insideLoop(points: Point[], x: number, z: number): boolean {
   return inside;
 }
 
-/** Flat, irregular light-blue ponds: some in the infield, some outside the loop. */
-function ponds(track: TrackPath, rand: () => number): Group {
+const POND_MATERIALS: Record<PondStyle, () => MeshStandardMaterial> = {
+  water: () => new MeshStandardMaterial({ color: '#7dc8ef', roughness: 0.15, metalness: 0.1 }),
+  lava: () => new MeshStandardMaterial({ color: '#ff6a1a', emissive: '#ff4500', emissiveIntensity: 0.9, roughness: 0.6 }),
+};
+
+/** Flat, irregular pools, light blue or glowing lava: some in the infield, some outside the loop. */
+function ponds(track: TrackPath, rand: () => number, style: PondStyle): Group {
   const group = new Group();
-  const mat = new MeshStandardMaterial({ color: '#7dc8ef', roughness: 0.15, metalness: 0.1 });
+  const mat = POND_MATERIALS[style]();
   const box = sceneryBox(track);
   const centres: Point[] = [];
 

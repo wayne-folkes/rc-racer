@@ -6,7 +6,7 @@
     <title>RC Racer</title>
     <meta
       name="description"
-      content="A retro RC racing game in your browser. Race three rivals across four themed tracks, grab missiles and bombs, hit the boost pads, and upgrade your car between races."
+      content="A retro RC racing game in your browser. Race three rivals across two circuits of themed tracks, from meadows to the Moon, grab missiles and bombs, hit the boost pads, and upgrade your car between races."
     />
     <meta name="theme-color" content="#0f172a" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -18,7 +18,7 @@
     <meta property="og:title" content="RC Racer" />
     <meta
       property="og:description"
-      content="A retro RC racing game in your browser. Race three rivals across four themed tracks, grab missiles and bombs, hit the boost pads, and upgrade your car between races."
+      content="A retro RC racing game in your browser. Race three rivals across two circuits of themed tracks, from meadows to the Moon, grab missiles and bombs, hit the boost pads, and upgrade your car between races."
     />
     <meta property="og:url" content="https://racer.folkes.dev/" />
     <meta property="og:image" content="https://racer.folkes.dev/og.png" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="RC Racer" />
     <meta
       name="twitter:description"
-      content="A retro RC racing game in your browser. Race three rivals across four themed tracks, grab missiles and bombs, hit the boost pads, and upgrade your car between races."
+      content="A retro RC racing game in your browser. Race three rivals across two circuits of themed tracks, from meadows to the Moon, grab missiles and bombs, hit the boost pads, and upgrade your car between races."
     />
     <meta name="twitter:image" content="https://racer.folkes.dev/og.png" />
   </head>
@@ -106,6 +106,20 @@
         <button id="garage-next" class="results-button" type="button">Next race</button>
       </div>
     </div>
+    <div id="circuit" class="results" hidden>
+      <div class="results-card" role="dialog" aria-labelledby="circuit-heading">
+        <h2 id="circuit-heading" class="results-title">Choose your circuit</h2>
+        <p class="results-subtitle">Four races each. Both are open from the start.</p>
+        <ul id="circuit-options" class="garage-upgrades"></ul>
+        <div class="toggle-row">
+          <button id="circuit-reverse" class="results-button results-button-secondary" type="button" aria-pressed="false">
+            Reverse: Off
+          </button>
+        </div>
+        <p class="toggle-hint">Reverse: every track is driven the other way, with its own records.</p>
+        <button id="circuit-back" class="results-button results-button-secondary" type="button">Back</button>
+      </div>
+    </div>
     <div id="vehicle" class="results" hidden>
       <div class="results-card" role="dialog" aria-labelledby="vehicle-heading">
         <h2 id="vehicle-heading" class="results-title">Choose your ride</h2>
@@ -115,13 +129,8 @@
           <button id="vehicle-easy" class="results-button results-button-secondary" type="button" aria-pressed="false">
             Easy mode: Off
           </button>
-          <button id="vehicle-reverse" class="results-button results-button-secondary" type="button" aria-pressed="false">
-            Reverse: Off
-          </button>
         </div>
-        <p class="toggle-hint">
-          Easy: you start 2nd and the opponents are a little slower. Reverse: every track is driven the other way.
-        </p>
+        <p class="toggle-hint">Easy: you start 2nd and the opponents are a little slower.</p>
         <button id="vehicle-back" class="results-button results-button-secondary" type="button">Back</button>
       </div>
     </div>
@@ -156,6 +165,7 @@
     <div id="records" class="results" hidden>
       <div class="results-card" role="dialog" aria-labelledby="records-heading">
         <h2 id="records-heading" class="results-title">Records</h2>
+        <div id="records-circuits" class="records-tabs" role="group" aria-label="Circuit"></div>
         <div id="records-tabs" class="records-tabs" role="group" aria-label="Vehicle"></div>
         <div id="records-directions" class="records-tabs" role="group" aria-label="Direction"></div>
         <ol id="records-list" class="records-list"></ol>
@@ -203,10 +213,11 @@
         </p>
         <h3 class="howto-head">Season</h3>
         <p class="howto-text">
-          Pick a Buggy or a Monster Truck when you start a season: everyone on the track drives the same one. Easy
-          mode starts you 2nd and makes the opponents a little slower. Reverse drives every track the other way
-          round, with its own records. Finish in the top three to go through to the next round. Prize money buys upgrades in the garage between races.
-          You get 2 continues to retry a race you miss.
+          Pick a circuit, the Classic Cup or the Space Cup, then a Buggy or a Monster Truck: everyone on the track
+          drives the same one. Reverse drives every track the other way round, and Easy mode starts you 2nd and
+          makes the opponents a little slower. Each has its own records. Finish in the top three to go through to the
+          next round. Prize money buys upgrades in the garage between races. You get 2 continues to retry a race you
+          miss.
         </p>
         <button id="howto-back" class="results-button results-button-secondary" type="button">Back</button>
       </div>
