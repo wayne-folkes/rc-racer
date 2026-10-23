@@ -33,6 +33,7 @@ import { buildGridLabel } from './game/gridLabel';
 import { TouchControls } from './game/touch';
 import type { VehicleId } from './game/vehicles';
 import { blendCar, poseOf, type Pose } from './game/renderPose';
+import { IdleWatch } from './ui/idle';
 import { Minimap } from './ui/minimap';
 import { createMeteors, type MeteorScene } from './game/meteorScene';
 import { createWeather, type WeatherScene } from './game/weatherScene';
@@ -59,6 +60,8 @@ const DEMO_SKILL = { pace: 0.92, steerGain: 2.4 };
 const DEMO_COUNTDOWN = 0.01;
 /** Seconds the demo waits after its leader finishes before moving on to the next track. */
 const DEMO_NEXT_DELAY = 3;
+/** On a desktop, the title menu steps aside after this long untouched, to show the demo behind it. */
+const MENU_IDLE_SECONDS = 30;
 /** Item sound effects in the demo are quieter, so the title stays calm. */
 const DEMO_SOUND_VOLUME = 0.3;
 /** How far a left or right press moves a focused slider (percent). */
@@ -226,6 +229,13 @@ const garage = new Garage(season, {
  * top of the stack shows. Esc or pause backs out of it (see pauseKey).
  */
 const cardStack: MenuCard[] = [];
+const menuIdle = new IdleWatch(MENU_IDLE_SECONDS);
+const mouseAndKeys = window.matchMedia?.('(pointer: fine)');
+let sawActivity = false;
+// Anything the player does counts, even before the controls read it: moving the mouse is not a control.
+for (const type of ['mousemove', 'mousedown', 'pointerdown', 'keydown', 'wheel', 'touchstart']) {
+  window.addEventListener(type, () => (sawActivity = true), { capture: true, passive: true });
+}
 const titleCard = new TitleCard(titleInfo, {
   continueSeason: resumeSeason,
   newSeason,
@@ -1038,11 +1048,20 @@ function frame(now: number): void {
   last = now;
 
   controls.poll();
+  // The title steps aside after a while so the demo behind it can be watched. Whatever wakes it is spent on that.
+  const seconds = now / 1000;
+  const woke = (sawActivity || controls.used()) && menuIdle.poke(seconds);
+  sawActivity = false;
+  const watching = !!mouseAndKeys?.matches && topCard() === titleCard && !garage.open && !!results.root.hidden;
+  const away = menuIdle.update(seconds, watching);
+  titleCard.root.classList.toggle('is-away', away);
+  // A focused button would still answer the space bar while the menu is out of sight.
+  if (away && document.activeElement instanceof HTMLElement) document.activeElement.blur();
   updateHints();
   updateConnectToast();
   // The touch buttons would sit on top of the menu cards, so they only show during a race.
   touch.setVisible(!menuCard());
-  handleMenuInput();
+  if (!woke) handleMenuInput();
   if (controls.pressed('pause')) pauseKey();
   // Driving only happens in a live race: not in the title's demo, and not while paused.
   const driving = live && !demo && !paused;
