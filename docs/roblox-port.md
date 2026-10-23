@@ -45,7 +45,7 @@ again.
 
 - **roblox-ts** (TypeScript → Luau compiler), so the pure modules can be reused largely as-is.
 - **Rojo** to sync source files from the repo into Roblox Studio, keeping the code in git.
-- A **new project folder**, `~/dev/vibe_coding/rc-racer-roblox/`, beside this one. This repo stays
+- A **new project folder**, `rc-racer-roblox/`, beside this one. This repo stays
   the reference.
 
 Practicalities: Roblox Studio (a desktop app) is needed to play and test; code can be written and
@@ -57,7 +57,7 @@ the content maturity questionnaire (cartoon missiles and bombs are fine).
 **Goal:** one drivable car on Meadow Loop in Roblox, with the same arcade feel, using roblox-ts +
 Rojo and the ported handling code.
 
-1. **Toolchain.** In `~/dev/vibe_coding/rc-racer-roblox/`: roblox-ts (`rbxtsc`), a Rojo project
+1. **Toolchain.** In `rc-racer-roblox/`: roblox-ts (`rbxtsc`), a Rojo project
    file, and `src/` with `client/`, `server/` and `shared/`. Pin tool versions (mise or npm, as the
    sibling projects do). `git init`; don't create a GitHub repo or push without asking.
 2. **Port the pure logic** to `src/shared/` with as few changes as possible: `carPhysics.ts`
