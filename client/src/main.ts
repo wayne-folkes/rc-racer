@@ -10,6 +10,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import { inject } from '@vercel/analytics';
+import { injectSpeedInsights } from '@vercel/speed-insights';
 import './style.css';
 import { distanceVolume, engineNote, Sound, type SoundName } from './game/audio';
 import { DEFAULT_TUNING, speed, type CarState } from './game/carPhysics';
@@ -88,8 +89,9 @@ interface CarView {
  */
 type BuildMode = 'idle' | 'racing' | 'demo';
 
-// Initialize Vercel Web Analytics
+// Initialize Vercel Web Analytics and Speed Insights
 inject();
+injectSpeedInsights();
 
 const container = document.getElementById('app')!;
 const renderer = new WebGLRenderer({ antialias: true });
