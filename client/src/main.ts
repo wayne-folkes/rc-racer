@@ -107,10 +107,11 @@ container.appendChild(renderer.domElement);
 
 const scene = new Scene();
 scene.background = new Color('#8fc7e8');
-scene.add(new HemisphereLight('#dff1ff', '#5a7d3a', 1.6));
+const skyLight = new HemisphereLight();
+scene.add(skyLight);
 
 // The sun follows the car so its shadow map only has to cover the area on screen.
-const sun = new DirectionalLight('#fff4dd', 2.4);
+const sun = new DirectionalLight();
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, {
@@ -123,6 +124,20 @@ Object.assign(sun.shadow.camera, {
 });
 sun.shadow.bias = -0.0005;
 scene.add(sun, sun.target);
+
+/** Daylight, or the dim blue moonlight of a night track, where the scenery's neon and lamps stand out. */
+const DAYLIGHT = { sky: '#dff1ff', ground: '#5a7d3a', ambient: 1.6, sun: '#fff4dd', direct: 2.4 };
+const MOONLIGHT = { sky: '#9fb2e0', ground: '#2a3044', ambient: 0.95, sun: '#c4d2ff', direct: 1.4 };
+
+function setLighting(night: boolean): void {
+  const light = night ? MOONLIGHT : DAYLIGHT;
+  skyLight.color.set(light.sky);
+  skyLight.groundColor.set(light.ground);
+  skyLight.intensity = light.ambient;
+  sun.color.set(light.sun);
+  sun.intensity = light.direct;
+}
+setLighting(false);
 
 const season = new Season(loadSeason() ?? undefined);
 
@@ -334,6 +349,7 @@ function buildRace(def: TrackDef, mode: BuildMode): void {
   meteors = def.theme.meteors ? createMeteors(track, def.theme.ground, raceCount) : null;
   if (meteors) scene.add(meteors.root);
   scene.background = new Color(def.theme.sky);
+  setLighting(def.theme.night === true);
 
   const number = season.tracks.indexOf(def) + 1;
   roundHud = `Round ${number}/${season.tracks.length} · ${def.name}`;
