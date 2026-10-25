@@ -15,7 +15,7 @@ import {
 import { seededRandom } from './items';
 import type { Weather } from './tracks';
 
-// Ambient weather drawn over the track: snow, dust, embers or ice glitter drifting around the car, or
+// Ambient weather drawn over the track: snow, dust, embers, ice glitter or rain drifting around the car, or
 // tumbleweeds rolling across it.
 // Purely visual. Nothing here reads or changes the cars or the simulation.
 
@@ -66,6 +66,8 @@ const FLURRIES: Record<Exclude<Weather, 'tumbleweeds'>, Flurry> = {
   embers: { count: 700, fallMin: -4, fallMax: -1.5, drift: 0.4, sway: 0.8, swayRate: 1.5, size: 5, opacity: 1, core: '255, 225, 130', rim: '255, 90, 20' },
   // Ice crystals catching the light over Europa.
   glitter: { count: 900, fallMin: 0.4, fallMax: 1.2, drift: 0.3, sway: 0.3, swayRate: 2.5, size: 4, opacity: 1, core: '255, 255, 255', rim: '120, 200, 255' },
+  // Fast, fine drops slanting down through the City Cup's night.
+  rain: { count: 2200, fallMin: 16, fallMax: 22, drift: 1.5, sway: 0, swayRate: 0, size: 3, opacity: 0.75, core: '210, 225, 255', rim: '130, 160, 210' },
 };
 
 const TUMBLE_MIN = 2;
@@ -153,7 +155,7 @@ function flakeTexture({ core, rim }: Flurry): CanvasTexture {
   return new CanvasTexture(canvas);
 }
 
-/** Particles in one Points object, drifting through a box that moves with the car: snow, dust, embers or glitter. */
+/** Particles in one Points object, drifting through a box that moves with the car: snow, dust, embers, glitter or rain. */
 function createFlurry(seed: number, flurry: Flurry): WeatherScene {
   const { count, fallMin, fallMax, drift, sway: swayAmount, swayRate } = flurry;
   const rand = seededRandom(seed);

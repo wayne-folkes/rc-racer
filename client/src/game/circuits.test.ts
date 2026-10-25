@@ -16,8 +16,16 @@ describe('circuits', () => {
   it('look different from one another', () => {
     const themes = ALL_TRACKS.filter((t) => !t.reversed).map((t) => t.theme);
     expect(new Set(themes.map((t) => t.ground)).size).toBe(themes.length);
-    const space = CIRCUITS.space.tracks.map((t) => t.theme.scenery);
-    expect(new Set(space).size).toBe(space.length);
+    for (const id of ['space', 'toybox', 'city'] as const) {
+      const scenery = CIRCUITS[id].tracks.map((t) => t.theme.scenery);
+      expect(new Set(scenery).size, id).toBe(scenery.length);
+    }
+  });
+
+  it('race the City Cup at night, and the rest by day', () => {
+    for (const id of CIRCUIT_IDS) {
+      for (const t of CIRCUITS[id].tracks) expect(t.theme.night === true, t.id).toBe(id === 'city');
+    }
   });
 
   it('hand back the same reversed list each time', () => {

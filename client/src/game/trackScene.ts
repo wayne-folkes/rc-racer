@@ -1,4 +1,5 @@
 import {
+  BoxGeometry,
   BufferGeometry,
   CanvasTexture,
   CircleGeometry,
@@ -18,6 +19,7 @@ import {
   RingGeometry,
   Shape,
   ShapeGeometry,
+  SphereGeometry,
   Sprite,
   Texture,
 } from 'three';
@@ -246,7 +248,23 @@ function gridSlots(track: TrackPath): Group {
 function scenery(track: TrackPath, theme: TrackTheme): Group {
   const group = new Group();
   const rand = seededRandom(SCENERY_SEED);
-  const make = { trees, cacti, pines, craters, mesas, volcanoes, ice }[theme.scenery];
+  const make = {
+    trees,
+    cacti,
+    pines,
+    craters,
+    mesas,
+    volcanoes,
+    ice,
+    toys,
+    pantry,
+    sandcastles,
+    workshop,
+    skyscrapers,
+    rooftop,
+    containers,
+    streetlights,
+  }[theme.scenery];
   group.add(make(track, rand));
   if (theme.ponds) group.add(ponds(track, rand, theme.ponds));
   return group;
@@ -597,6 +615,348 @@ function cracks(track: TrackPath, rand: () => number): Group {
   return group;
 }
 
+// The Toybox and City cups' scenery is all boxes, cylinders and spheres, each scaled from one unit shape.
+const unitBox = new BoxGeometry(1, 1, 1);
+/** Radius 1 and height 1, so a mesh's x and z scale are its radius and its y scale its height. */
+const unitCylinder = new CylinderGeometry(1, 1, 1, 12);
+const unitSphere = new SphereGeometry(1, 12, 8);
+
+/** A mesh of a unit shape, scaled to size and placed at (x, y, z) within its object. */
+function piece(geometry: BufferGeometry, mat: Material, size: [number, number, number], at: [number, number, number]): Mesh {
+  const mesh = new Mesh(geometry, mat);
+  mesh.scale.set(...size);
+  mesh.position.set(...at);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+const box = (mat: Material, w: number, h: number, d: number, x: number, y: number, z: number) => piece(unitBox, mat, [w, h, d], [x, y, z]);
+const cylinder = (mat: Material, r: number, h: number, x: number, y: number, z: number) => piece(unitCylinder, mat, [r, h, r], [x, y, z]);
+const ball = (mat: Material, r: number, x: number, y: number, z: number) => piece(unitSphere, mat, [r, r, r], [x, y, z]);
+
+const solid = (color: string, roughness = 0.7) => new MeshStandardMaterial({ color, roughness });
+/** Neon and lamps: they light themselves, so they glow on the night tracks. */
+const glow = (color: string) => new MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.4 });
+const pick = <T>(rand: () => number, list: T[]): T => list[Math.floor(rand() * list.length)];
+
+const TOY_COLORS = ['#e53b3b', '#f2c12e', '#3b7be5', '#3bb54a', '#f08a24'];
+const BOOK_COLORS = ['#8c2f39', '#2f5d8c', '#3c7a4a', '#c9a227', '#6b3fa0', '#d9d2c3'];
+const PACKET_COLORS = ['#e8b531', '#d9443a', '#3f7fd1', '#5aa64a'];
+const LABEL_COLORS = ['#d9443a', '#3f7fd1', '#f2c12e', '#3bb54a', '#ffffff'];
+const FRUIT_COLORS = ['#e0301e', '#f5a623', '#9bc53d'];
+const TOWER_COLORS = ['#262a3a', '#2f3347', '#1f2230'];
+const NEON_COLORS = ['#ff3cac', '#2de2e6', '#f9c80e', '#7b5cff'];
+const CONTAINER_COLORS = ['#c2402f', '#2f6fb3', '#3a8f4f', '#d68b2a', '#6d6f75'];
+
+/** Bedroom: building blocks, some stacked two high, piles of books and the odd ball. */
+function toys(track: TrackPath, rand: () => number): Group {
+  const toyMats = TOY_COLORS.map((color) => solid(color, 0.45));
+  const bookMats = BOOK_COLORS.map((color) => solid(color, 0.8));
+
+  const block = () => {
+    const group = new Group();
+    const s = 0.8 + rand() * 0.8;
+    group.add(box(pick(rand, toyMats), s, s, s, 0, s / 2, 0));
+    if (rand() < 0.3) {
+      const t = s * 0.7;
+      const top = box(pick(rand, toyMats), t, t, t, 0, s + t / 2, 0);
+      top.rotation.y = rand() * (Math.PI / 2);
+      group.add(top);
+    }
+    return group;
+  };
+  const books = () => {
+    const group = new Group();
+    const n = 2 + Math.floor(rand() * 3);
+    let y = 0;
+    for (let i = 0; i < n; i++) {
+      const w = 2.4 + rand() * 0.8;
+      const d = 1.7 + rand() * 0.5;
+      const h = 0.3 + rand() * 0.2;
+      const book = box(pick(rand, bookMats), w, h, d, 0, y + h / 2, 0);
+      book.rotation.y = (rand() - 0.5) * 0.5;
+      group.add(book);
+      y += h;
+    }
+    return group;
+  };
+  const toyBall = () => {
+    const r = 0.6 + rand() * 0.6;
+    return ball(pick(rand, toyMats), r, 0, r, 0);
+  };
+
+  const group = new Group();
+  group.add(scatter(track, rand, 140, block));
+  group.add(scatter(track, rand, 24, books, 2));
+  group.add(scatter(track, rand, 24, toyBall, 1));
+  return group;
+}
+
+/** Kitchen: cereal boxes, tins and fruit dropped on the floor. */
+function pantry(track: TrackPath, rand: () => number): Group {
+  const packetMats = PACKET_COLORS.map((color) => solid(color, 0.6));
+  const panelMat = solid('#fff6e0', 0.6);
+  const labelMats = LABEL_COLORS.map((color) => solid(color, 0.6));
+  const tinMat = new MeshStandardMaterial({ color: '#c9ced4', roughness: 0.3, metalness: 0.6 });
+  const fruitMats = FRUIT_COLORS.map((color) => solid(color, 0.5));
+
+  // The front panel stands just proud of the box, so the two never share a face.
+  const cereal = () => {
+    const group = new Group();
+    const w = 1.6 + rand() * 0.6;
+    const d = 0.6 + rand() * 0.2;
+    const h = 2.2 + rand() * 0.8;
+    group.add(box(pick(rand, packetMats), w, h, d, 0, h / 2, 0));
+    group.add(box(panelMat, w * 0.6, h * 0.4, 0.04, 0, h * 0.55, d / 2 + 0.02));
+    return group;
+  };
+  // A metal tin with a paper label round its middle, a little wider than the tin.
+  const tin = () => {
+    const group = new Group();
+    const r = 0.35 + rand() * 0.2;
+    const h = 0.8 + rand() * 0.6;
+    group.add(cylinder(tinMat, r, h, 0, h / 2, 0));
+    group.add(cylinder(pick(rand, labelMats), r * 1.04, h * 0.6, 0, h / 2, 0));
+    return group;
+  };
+  const fruit = () => {
+    const r = 0.35 + rand() * 0.2;
+    return ball(pick(rand, fruitMats), r, 0, r, 0);
+  };
+
+  const group = new Group();
+  group.add(scatter(track, rand, 40, cereal, 1.3));
+  group.add(scatter(track, rand, 90, tin));
+  group.add(scatter(track, rand, 50, fruit));
+  return group;
+}
+
+/** Sandbox: sandcastles with a tower at each corner, and buckets and spades left lying about. */
+function sandcastles(track: TrackPath, rand: () => number): Group {
+  const sandMat = solid('#d6b878', 0.95);
+  const towerMat = solid('#ccab68', 0.95);
+  const toyMats = TOY_COLORS.map((color) => solid(color, 0.45));
+  const handleMat = solid('#7a5230', 0.8);
+  const bucketGeom = new CylinderGeometry(0.75, 0.55, 1, 12);
+
+  const castle = () => {
+    const group = new Group();
+    const s = 0.9 + rand() * 0.5;
+    group.add(box(sandMat, 2.4 * s, 1.6 * s, 2.4 * s, 0, 0.8 * s, 0));
+    for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      group.add(cylinder(towerMat, 0.5 * s, 2.2 * s, 1.2 * s * x, 1.1 * s, 1.2 * s * z));
+    }
+    return group;
+  };
+  // Open end up, wider at the top.
+  const bucket = () => piece(bucketGeom, pick(rand, toyMats), [1, 1, 1], [0, 0.5, 0]);
+  // Lying on the sand: a handle along X with the blade at its end.
+  const spade = () => {
+    const group = new Group();
+    const handle = cylinder(handleMat, 0.08, 1.4, 0, 0.08, 0);
+    handle.rotation.z = Math.PI / 2;
+    group.add(handle, box(pick(rand, toyMats), 0.7, 0.06, 0.6, 1.05, 0.03, 0));
+    return group;
+  };
+
+  const group = new Group();
+  group.add(scatter(track, rand, 20, castle, 3));
+  group.add(scatter(track, rand, 50, bucket));
+  group.add(scatter(track, rand, 40, spade));
+  return group;
+}
+
+/** Garage: stacks of tyres, paint tins and red toolboxes. */
+function workshop(track: TrackPath, rand: () => number): Group {
+  const tyreMat = solid('#1f1f24', 0.9);
+  const hubMat = solid('#6a6d75', 0.5);
+  const tinMat = new MeshStandardMaterial({ color: '#b9bec4', roughness: 0.3, metalness: 0.6 });
+  const lidMats = TOY_COLORS.map((color) => solid(color, 0.45));
+  const toolboxMat = solid('#c8302c', 0.5);
+  const handleMat = solid('#2a2a2e', 0.6);
+
+  // The hub sits on the top tyre, a little proud of it.
+  const tyres = () => {
+    const group = new Group();
+    const n = 1 + Math.floor(rand() * 3);
+    for (let i = 0; i < n; i++) group.add(cylinder(tyreMat, 0.85, 0.5, 0, (i + 0.5) * 0.5, 0));
+    group.add(cylinder(hubMat, 0.45, 0.04, 0, n * 0.5 + 0.02, 0));
+    return group;
+  };
+  const paint = () => {
+    const group = new Group();
+    const h = 0.7 + rand() * 0.3;
+    group.add(cylinder(tinMat, 0.4, h, 0, h / 2, 0));
+    group.add(cylinder(pick(rand, lidMats), 0.42, 0.08, 0, h + 0.04, 0));
+    return group;
+  };
+  const toolbox = () => {
+    const group = new Group();
+    group.add(box(toolboxMat, 2, 0.9, 0.9, 0, 0.45, 0));
+    group.add(box(handleMat, 1, 0.12, 0.12, 0, 1.06, 0));
+    group.add(box(handleMat, 0.12, 0.16, 0.12, -0.44, 0.98, 0), box(handleMat, 0.12, 0.16, 0.12, 0.44, 0.98, 0));
+    return group;
+  };
+
+  const group = new Group();
+  group.add(scatter(track, rand, 50, tyres));
+  group.add(scatter(track, rand, 70, paint));
+  group.add(scatter(track, rand, 20, toolbox, 1));
+  return group;
+}
+
+/** Downtown: dark towers ringed with neon bands, and neon billboards on poles. */
+function skyscrapers(track: TrackPath, rand: () => number): Group {
+  const towerMats = TOWER_COLORS.map((color) => solid(color, 0.8));
+  const neonMats = NEON_COLORS.map(glow);
+  const poleMat = solid('#3a3d48', 0.6);
+
+  // Short enough that one beside the road never hides a car from the camera. Each band is a slice a little
+  // wider than the tower, so it shows as a lit line round all four sides.
+  const tower = () => {
+    const group = new Group();
+    const w = 3 + rand() * 2.5;
+    const d = 3 + rand() * 2.5;
+    const h = 4 + rand() * 6;
+    group.add(box(pick(rand, towerMats), w, h, d, 0, h / 2, 0));
+    const neon = pick(rand, neonMats);
+    const bands = 1 + Math.floor(h / 3);
+    for (let k = 1; k <= bands; k++) group.add(box(neon, w + 0.08, 0.18, d + 0.08, 0, (h * k) / (bands + 1), 0));
+    group.add(box(neon, w + 0.12, 0.25, d + 0.12, 0, h, 0));
+    return group;
+  };
+  const billboard = () => {
+    const group = new Group();
+    group.add(cylinder(poleMat, 0.1, 3, 0, 1.5, 0));
+    group.add(box(pick(rand, neonMats), 2.4, 1.2, 0.12, 0, 3.4, 0));
+    return group;
+  };
+
+  const group = new Group();
+  group.add(scatter(track, rand, 50, tower, 4));
+  group.add(scatter(track, rand, 24, billboard, 1.3));
+  return group;
+}
+
+/** Rooftops: air-conditioning units, water tanks on legs, and aerials with a red light on top. */
+function rooftop(track: TrackPath, rand: () => number): Group {
+  const unitMat = solid('#8a8f99', 0.6);
+  const fanMat = solid('#3a3d44', 0.7);
+  const legMat = solid('#4a4d55', 0.6);
+  const woodMat = solid('#7a5638', 0.9);
+  const tankRoofMat = solid('#5a3f29', 0.9);
+  const mastMat = solid('#9aa0aa', 0.4);
+  const redLight = glow('#ff3030');
+  const roofGeom = new ConeGeometry(1.3, 0.6, 12);
+
+  // The fan sits on the unit, a little proud of its top.
+  const airCon = () => {
+    const group = new Group();
+    const w = 1.2 + rand() * 0.6;
+    group.add(box(unitMat, w, 0.9, w, 0, 0.45, 0));
+    group.add(cylinder(fanMat, w * 0.35, 0.04, 0, 0.92, 0));
+    return group;
+  };
+  const tank = () => {
+    const group = new Group();
+    for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) group.add(cylinder(legMat, 0.08, 1.2, 0.8 * x, 0.6, 0.8 * z));
+    group.add(cylinder(woodMat, 1.2, 1.8, 0, 2.1, 0));
+    group.add(piece(roofGeom, tankRoofMat, [1, 1, 1], [0, 3.3, 0]));
+    return group;
+  };
+  const aerial = () => {
+    const group = new Group();
+    const h = 3 + rand() * 2;
+    group.add(cylinder(mastMat, 0.06, h, 0, h / 2, 0));
+    group.add(ball(redLight, 0.18, 0, h, 0));
+    return group;
+  };
+
+  const group = new Group();
+  group.add(scatter(track, rand, 80, airCon));
+  group.add(scatter(track, rand, 20, tank, 1.4));
+  group.add(scatter(track, rand, 36, aerial));
+  return group;
+}
+
+/** Docks: shipping containers, some stacked two high, wooden crates and the odd bollard, and lamps along the quay. */
+function containers(track: TrackPath, rand: () => number): Group {
+  const boxMats = CONTAINER_COLORS.map((color) => solid(color, 0.7));
+  const crateMat = solid('#9a7148', 0.9);
+  const bollardMat = solid('#2c2c30', 0.6);
+  const capMat = solid('#e0b52a', 0.5);
+  const poleMat = solid('#5d616b', 0.5);
+  const lampMat = glow('#ffcf7a');
+
+  const container = () => {
+    const group = new Group();
+    group.add(box(pick(rand, boxMats), 6, 2.6, 2.4, 0, 1.3, 0));
+    if (rand() < 0.35) {
+      const top = box(pick(rand, boxMats), 6, 2.6, 2.4, 0, 3.9, 0);
+      top.rotation.y = (rand() - 0.5) * 0.2;
+      group.add(top);
+    }
+    return group;
+  };
+  const crate = () => {
+    if (rand() < 0.15) {
+      const group = new Group();
+      group.add(cylinder(bollardMat, 0.3, 0.7, 0, 0.35, 0), cylinder(capMat, 0.36, 0.1, 0, 0.75, 0));
+      return group;
+    }
+    const s = 0.9 + rand() * 0.5;
+    return box(crateMat, s, s, s, 0, s / 2, 0);
+  };
+  const lamp = () => {
+    const group = new Group();
+    group.add(cylinder(poleMat, 0.1, 4, 0, 2, 0));
+    group.add(box(lampMat, 0.5, 0.2, 0.5, 0, 4.1, 0));
+    return group;
+  };
+
+  const group = new Group();
+  group.add(scatter(track, rand, 44, container, 3.4));
+  group.add(scatter(track, rand, 70, crate));
+  group.add(scatter(track, rand, 24, lamp));
+  return group;
+}
+
+/** Freeway: street lights with a glowing head, green road signs, and dark bushes on the verge. */
+function streetlights(track: TrackPath, rand: () => number): Group {
+  const poleMat = solid('#6a6e78', 0.4);
+  const headMat = glow('#ffd27a');
+  const postMat = solid('#8a8f99', 0.4);
+  const signMat = solid('#2a8f58', 0.5);
+  const bushGeom = new DodecahedronGeometry(0.6, 0);
+  const bushMat = new MeshStandardMaterial({ color: '#1d3b26', flatShading: true, roughness: 0.95 });
+
+  // The arm reaches out along X, with the lamp hanging at its end.
+  const light = () => {
+    const group = new Group();
+    group.add(cylinder(poleMat, 0.1, 4.5, 0, 2.25, 0));
+    group.add(box(poleMat, 1.2, 0.1, 0.1, 0.6, 4.45, 0));
+    group.add(box(headMat, 0.6, 0.15, 0.3, 1.15, 4.35, 0));
+    return group;
+  };
+  const sign = () => {
+    const group = new Group();
+    group.add(cylinder(postMat, 0.08, 2.6, -1.2, 1.3, 0), cylinder(postMat, 0.08, 2.6, 1.2, 1.3, 0));
+    group.add(box(signMat, 3, 1.4, 0.1, 0, 2.6, 0));
+    return group;
+  };
+  const bush = () => {
+    const s = 0.6 + rand() * 0.8;
+    return piece(bushGeom, bushMat, [s * 1.2, s * 0.8, s * 1.1], [0, 0.3 * s, 0]);
+  };
+
+  const group = new Group();
+  group.add(scatter(track, rand, 60, light, 1.4));
+  group.add(scatter(track, rand, 14, sign, 1.6));
+  group.add(scatter(track, rand, 110, bush));
+  return group;
+}
+
 /** Whether a point lies inside the closed loop of track points (even-odd ray cast). */
 function insideLoop(points: Point[], x: number, z: number): boolean {
   let inside = false;
@@ -611,6 +971,8 @@ function insideLoop(points: Point[], x: number, z: number): boolean {
 const POND_MATERIALS: Record<PondStyle, () => MeshStandardMaterial> = {
   water: () => new MeshStandardMaterial({ color: '#7dc8ef', roughness: 0.15, metalness: 0.1 }),
   lava: () => new MeshStandardMaterial({ color: '#ff6a1a', emissive: '#ff4500', emissiveIntensity: 0.9, roughness: 0.6 }),
+  milk: () => new MeshStandardMaterial({ color: '#fbfaf3', roughness: 0.3 }),
+  oil: () => new MeshStandardMaterial({ color: '#121216', roughness: 0.15, metalness: 0.5 }),
 };
 
 /** Flat, irregular pools, light blue or glowing lava: some in the infield, some outside the loop. */

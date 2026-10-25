@@ -19,9 +19,12 @@ npm run dev
 
 The game opens on a title screen with Continue, New season, Records, Settings (sound, volume, reset
 progress) and How to play. New season asks you to pick a circuit, then a Buggy or a Monster Truck, and
-everyone on the track drives the same one. Both circuits are open from the start and run four rounds:
-the Classic Cup (meadow, desert, lakeside, snow) and the Space Cup, which races over the Moon (Tranquility
-Run), Mars (Olympus Rally), Io (Pele Loop) and Europa (Conamara Run), each with its own scenery and weather, and meteors that now and then crash in beside the track and leave craters. The buggy is quicker and sharper; the truck is a few percent slower
+everyone on the track drives the same one. All four circuits are open from the start and run four rounds:
+the Classic Cup (meadow, desert, lakeside, snow); the Space Cup, which races over the Moon (Tranquility
+Run), Mars (Olympus Rally), Io (Pele Loop) and Europa (Conamara Run), each with its own scenery and weather, and meteors that now and then crash in beside the track and leave craters; the Toybox Cup, round the
+house at an RC car's scale (Bedroom Floor, Kitchen Dash, Sandbox Scramble, Garage Grand Prix); and the City
+Cup, raced at night by neon and street light (Neon Downtown, Rooftop Run, and Harbour Docks and Midnight
+Freeway in the rain). The buggy is quicker and sharper; the truck is a few percent slower
 and softer to steer, but its big tires shrug off oil and puddles. Easy mode, a switch on the same
 screen, starts you 2nd (instead of 4th) and makes the opponents a little slower. Reverse, a switch on the
 circuit screen, drives every track the other way round. Every circuit, vehicle and direction has its own records. Oil and puddles are drawn at random within set stretches of road, so each race has them in different spots.
