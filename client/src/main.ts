@@ -9,7 +9,7 @@ import {
   type Sprite,
   WebGLRenderer,
 } from 'three';
-import { inject } from '@vercel/analytics';
+import { inject, pageview } from '@vercel/analytics';
 import { injectSpeedInsights } from '@vercel/speed-insights';
 import './style.css';
 import { distanceVolume, engineNote, Sound, type SoundName } from './game/audio';
@@ -95,6 +95,17 @@ type BuildMode = 'idle' | 'racing' | 'demo';
 // Initialize Vercel Web Analytics and Speed Insights
 inject();
 injectSpeedInsights();
+
+/**
+ * The URL never changes, so each screen sends its own page view; otherwise every visit is one page
+ * view and Web Analytics counts it as a bounce. The page load already counted the title as '/'.
+ */
+let screenPath = '/';
+function screenView(path: string): void {
+  if (path === screenPath) return;
+  screenPath = path;
+  pageview({ route: path, path });
+}
 
 const container = document.getElementById('app')!;
 const renderer = new WebGLRenderer({ antialias: true });
@@ -375,6 +386,7 @@ function startRace(): void {
   buildRace(season.track, 'racing');
   garage.hide();
   results.root.hidden = true;
+  screenView('/race');
 }
 
 /** Shows the garage over the scene of the next track, which stays still until the next race starts. */
@@ -383,6 +395,7 @@ function openGarage(): void {
   results.root.hidden = true;
   buildRace(season.tracks[season.state.round + 1] ?? season.track, 'idle');
   garage.show();
+  screenView('/garage');
 }
 
 function retryRace(): void {
@@ -398,6 +411,7 @@ let pendingCircuit: { circuit: CircuitId; reverse: boolean } = { circuit: 'class
 function newSeason(): void {
   results.root.hidden = true;
   pushCard(circuitCard);
+  screenView('/new-season');
 }
 
 function pickCircuit(circuit: CircuitId, reverse: boolean): void {
@@ -415,6 +429,7 @@ function startSeason(vehicle: VehicleId, easy: boolean): void {
 function backFromNewSeason(): void {
   popCard();
   if (cardStack.length === 0) results.root.hidden = false;
+  screenView(cardStack.length === 0 ? '/results' : '/');
 }
 
 /** Carries on with the saved season where it was left: the race, the garage or the summary card. */
@@ -474,6 +489,7 @@ function showTitle(): void {
   results.root.hidden = true;
   startDemo(savedSeasonInProgress() ? Math.max(0, demoTracks().indexOf(season.tracks[upcomingRound()])) : 0);
   pushCard(titleCard);
+  screenView('/');
 }
 
 /** Leaves the race for the title. The season is saved as it stands; the race in progress is abandoned, not recorded. */
@@ -861,6 +877,7 @@ function showEndCard(raced: boolean): void {
       setButton(results.secondary, 'Title screen', showTitle);
   }
   results.root.hidden = false;
+  screenView('/results');
 }
 
 /** Shows the top card of the stack and hides the rest. */
